@@ -170,7 +170,7 @@ export function toPublicElection(
  */
 export function toPublicBallot(internalBallot: InternalBallot): PublicBallot {
   return {
-    voter_id: internalBallot._id.toString(),
+    voter_id: internalBallot.voter_id.toString(),
     ranking: internalBallot.ranking
   };
 }
@@ -215,7 +215,8 @@ export function publicElectionAggregation(
   tokenAttributeOwner: TokenAttributeOwner
 ): Document[] {
   return [
-    { $sort: { _id: 1 } },
+    // ? LIFO
+    { $sort: { _id: -1 } },
     { $limit: getEnv().RESULTS_PER_PAGE },
     { $set: { owned: { $eq: ['$__provenance', tokenAttributeOwner] } } },
     { $project: { ...incompletePublicElectionProjection, owned: true } }

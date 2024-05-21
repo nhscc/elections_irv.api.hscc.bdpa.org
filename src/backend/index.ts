@@ -56,7 +56,18 @@ export async function getAllElections({
 
   return electionsDb
     .aggregate<PublicElection>([
-      { $match: { ...(afterId ? { _id: { $gt: afterId } } : {}) } },
+      {
+        $match: {
+          ...(afterId
+            ? {
+                _id: {
+                  // ? LIFO
+                  $lt: afterId
+                }
+              }
+            : {})
+        }
+      },
       ...publicElectionAggregation(provenance)
     ])
     .toArray();
@@ -113,7 +124,7 @@ export async function getElection({
 
   const election = await electionsDb
     .aggregate<PublicElection>([
-      { $match: { election_id: electionId } },
+      { $match: { _id: electionId } },
       ...publicElectionAggregation(provenance)
     ])
     .next();

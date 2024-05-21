@@ -101,7 +101,7 @@ const elections: InternalElection[] = [
   {
     _id: generateMockSensitiveObjectId(),
     __provenance: dummyRootData.auth[0].attributes.owner,
-    title: 'election #4 (open but not closed)',
+    title: 'election #5 (open but not closed)',
     description: 'election 5 description',
     options: ['a', 'b', 'c'],
     createdAt: createdAtLowValue,
@@ -112,7 +112,7 @@ const elections: InternalElection[] = [
   {
     _id: generateMockSensitiveObjectId(),
     __provenance: dummyRootData.auth[0].attributes.owner,
-    title: 'election #5 (closed)',
+    title: 'election #6 (closed)',
     description: 'election 6 description',
     options: ['z-0', 'y-1', 'x-2', 'w-3', 'v-4', 'u-5'],
     createdAt: createdAtHighValue,
