@@ -1,10 +1,10 @@
 /* eslint-disable jest/unbound-method */
 /* eslint-disable jest/prefer-lowercase-title */
+import { asMockedFunction } from '@xunnamius/jest-types';
 import { rest } from 'msw';
 import { setupServer } from 'msw/node';
 import { DummyError, TrialError } from 'named-app-errors';
 import { Headers, Response } from 'node-fetch';
-import { asMockedFunction } from '@xunnamius/jest-types';
 import { setTimeout } from 'node:timers/promises';
 
 import {
@@ -591,7 +591,7 @@ describe('RequestQueue::beginProcessingRequestQueue', () => {
     jest.advanceTimersByTime(queue.intervalPeriodMs);
 
     await expect(pReq).rejects.toBeInstanceOf(Error);
-    expect(responseInspector).not.toBeCalled();
+    expect(responseInspector).not.toHaveBeenCalled();
   });
 
   it('is auto-bound at instantiation', async () => {

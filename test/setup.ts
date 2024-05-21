@@ -349,7 +349,7 @@ export async function protectedImport<T = unknown>({
       expectedExitCode === 'non-zero'
         ? expect(exitSpy).not.toBeCalledWith(0)
         : expectedExitCode === undefined
-          ? expect(exitSpy).not.toBeCalled()
+          ? expect(exitSpy).not.toHaveBeenCalled()
           : expect(exitSpy).toBeCalledWith(expectedExitCode);
     } else {
       debug.warn('"expect" object not found, so exit check was skipped');

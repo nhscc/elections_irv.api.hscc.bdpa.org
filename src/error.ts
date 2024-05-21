@@ -11,6 +11,15 @@ export const ErrorMessage = {
   ...NamedErrorMessage,
   DuplicateFieldValue: (property: string) =>
     `an item with that "${property}" already exists`,
+  DuplicateArrayValue: (element: string) =>
+    `duplicate array element "${element}" is not allowed`,
+  InvalidLength: (
+    property: string,
+    actualLength: number,
+    minLength: number,
+    maxLength?: number | null
+  ) =>
+    `\`${property}\` has invalid length (${actualLength}). Length must be between ${minLength} and ${maxLength} (inclusive)`,
   InvalidFieldValue: (
     property: string,
     value?: string | null,
@@ -32,14 +41,20 @@ export const ErrorMessage = {
     } is invalid or illegal${
       validValues ? `. Valid values: ${validValues.join(', ')}` : ''
     }`,
+  InvalidObjectKey: (
+    property: string,
+    key?: string,
+    validValues?: readonly string[]
+  ) =>
+    `the \`${property}\` object key \`${key}\` is invalid${validValues ? `. Valid keys: ${validValues.join(', ')}` : ''}`,
   InvalidObjectKeyValue: (
     property: string,
-    value?: string,
+    value?: unknown,
     validValues?: readonly string[]
   ) =>
     `a \`${property}\` object key has ${
       value
-        ? `invalid or illegal value "${value}"`
+        ? `invalid or illegal value "${String(value)}"`
         : 'a missing, invalid, or illegal value'
     }${validValues ? `. Valid values: ${validValues.join(', ')}` : ''}`,
   InvalidJSON: (property?: string) =>
@@ -49,12 +64,12 @@ export const ErrorMessage = {
     property: string,
     min: number | string,
     max: number | string | null,
-    type: 'number' | 'integer',
+    type: LiteralUnion<'number' | 'integer', string>,
     nullable = false,
     isArray = false
   ) =>
     `${isArray ? `each \`${property}\` element` : `\`${property}\``} must be a${
-      type === 'integer' ? 'n integer' : ' number'
+      type === 'integer' ? 'n integer' : type === 'number' ? ' number' : type
     } ${max ? `between ${min} and ${max} (inclusive)` : `>= ${min}`}${
       nullable ? ' or null' : ''
     }`,

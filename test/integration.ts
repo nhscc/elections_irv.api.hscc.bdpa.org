@@ -8,6 +8,8 @@ import { defaultNavLinks } from 'universe/backend';
 import { getEnv } from 'universe/backend/env';
 import { GuruMeditationError, ValidationError } from 'universe/error';
 
+// TODO: integration tests are not finished for this repo (sowwy)
+
 import {
   toPublicUser,
   type NewPage,

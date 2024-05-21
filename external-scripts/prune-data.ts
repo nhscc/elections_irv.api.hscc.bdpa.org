@@ -7,10 +7,10 @@ import {
   InvalidAppEnvironmentError
 } from 'named-app-errors';
 
-import { debugNamespace as namespace } from 'universe/constants';
-import { deleteArticle, deleteOpportunity, deleteUser } from 'universe/backend';
+import { superDeleteElectionAndRelatedBallots } from 'universe/backend';
+import { getElectionsDb } from 'universe/backend/db';
 import { getEnv } from 'universe/backend/env';
-import { getArticlesDb, getOpportunitiesDb, getUsersDb } from 'universe/backend/db';
+import { debugNamespace as namespace } from 'universe/constants';
 
 import { debugFactory } from 'multiverse/debug-extended';
 import { getDb } from 'multiverse/mongo-schema';
@@ -69,22 +69,23 @@ const getDbCollectionLimits = (env: ReturnType<typeof getEnv>) => {
       }
     },
     app: {
-      articles: {
+      elections: {
         limit: {
           maxBytes:
-            env.PRUNE_DATA_MAX_ARTICLES_BYTES && env.PRUNE_DATA_MAX_ARTICLES_BYTES > 0
-              ? env.PRUNE_DATA_MAX_ARTICLES_BYTES
+            env.PRUNE_DATA_MAX_ELECTIONS_BYTES &&
+            env.PRUNE_DATA_MAX_ELECTIONS_BYTES > 0
+              ? env.PRUNE_DATA_MAX_ELECTIONS_BYTES
               : toss(
                   new InvalidAppEnvironmentError(
-                    'PRUNE_DATA_MAX_ARTICLES_BYTES must be greater than zero'
+                    'PRUNE_DATA_MAX_ELECTIONS_BYTES must be greater than zero'
                   )
                 )
         },
         async deleteFn(thresholdEntry) {
-          const articlesDb = await getArticlesDb();
+          const electionsDb = await getElectionsDb();
 
           const ids = (
-            await articlesDb
+            await electionsDb
               .find(
                 { _id: { $lte: thresholdEntry._id } },
                 { projection: { _id: true } }
@@ -93,80 +94,24 @@ const getDbCollectionLimits = (env: ReturnType<typeof getEnv>) => {
           ).map((entry) => entry._id);
 
           await Promise.all(
-            ids.map((id) => deleteArticle({ article_id: id.toString() }))
+            ids.map((id) =>
+              superDeleteElectionAndRelatedBallots({ election_id: id.toString() })
+            )
           );
 
           return ids.length;
         }
       },
-      opportunities: {
+      ballots: {
         limit: {
           maxBytes:
-            env.PRUNE_DATA_MAX_OPPORTUNITIES_BYTES &&
-            env.PRUNE_DATA_MAX_OPPORTUNITIES_BYTES > 0
-              ? env.PRUNE_DATA_MAX_OPPORTUNITIES_BYTES
+            env.PRUNE_DATA_MAX_BALLOTS_BYTES && env.PRUNE_DATA_MAX_BALLOTS_BYTES > 0
+              ? env.PRUNE_DATA_MAX_BALLOTS_BYTES
               : toss(
                   new InvalidAppEnvironmentError(
-                    'PRUNE_DATA_MAX_OPPORTUNITIES_BYTES must be greater than zero'
+                    'PRUNE_DATA_MAX_BALLOTS_BYTES must be greater than zero'
                   )
                 )
-        },
-        async deleteFn(thresholdEntry) {
-          const opportunitiesDb = await getOpportunitiesDb();
-
-          const ids = (
-            await opportunitiesDb
-              .find(
-                { _id: { $lte: thresholdEntry._id } },
-                { projection: { _id: true } }
-              )
-              .toArray()
-          ).map((entry) => entry._id);
-
-          await Promise.all(
-            ids.map((id) => deleteOpportunity({ opportunity_id: id.toString() }))
-          );
-
-          return ids.length;
-        }
-      },
-      sessions: {
-        limit: {
-          maxBytes:
-            env.PRUNE_DATA_MAX_SESSIONS_BYTES && env.PRUNE_DATA_MAX_SESSIONS_BYTES > 0
-              ? env.PRUNE_DATA_MAX_SESSIONS_BYTES
-              : toss(
-                  new InvalidAppEnvironmentError(
-                    'PRUNE_DATA_MAX_SESSIONS_BYTES must be greater than zero'
-                  )
-                )
-        }
-      },
-      users: {
-        limit: {
-          maxBytes:
-            env.PRUNE_DATA_MAX_USERS_BYTES && env.PRUNE_DATA_MAX_USERS_BYTES > 0
-              ? env.PRUNE_DATA_MAX_USERS_BYTES
-              : toss(
-                  new InvalidAppEnvironmentError(
-                    'PRUNE_DATA_MAX_USERS_BYTES must be greater than zero'
-                  )
-                )
-        },
-        async deleteFn(thresholdEntry) {
-          const users = await getUsersDb();
-
-          const ids = (
-            await users
-              .find(
-                { _id: { $lte: thresholdEntry._id } },
-                { projection: { _id: true } }
-              )
-              .toArray()
-          ).map((entry) => entry._id);
-
-          await Promise.all(ids.map((id) => deleteUser({ user_id: id.toString() })));
-          return ids.length;
         }
       }
     }

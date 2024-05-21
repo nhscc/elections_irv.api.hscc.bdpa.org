@@ -1,4 +1,4 @@
-import { ObjectId, type Document, type Collection, type WithId } from 'mongodb';
+import { ObjectId, type Collection, type Document, type WithId } from 'mongodb';
 import { AppValidationError, ErrorMessage, ValidationError } from 'named-app-errors';
 
 /**
@@ -37,6 +37,7 @@ export type ItemExistsOptions = {
   optimisticCoercion?: boolean;
 };
 
+// TODO: the following needs to work with composite keys
 /**
  * Checks if an item matching `{ _id: id }` exists within `collection`.
  */
