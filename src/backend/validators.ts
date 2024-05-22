@@ -3,11 +3,29 @@ import { getEnv } from 'universe/backend/env';
 import { ErrorMessage, ValidationError } from 'universe/error';
 
 import {
+  getElectionsDb,
+  type InternalElection,
   type NewElection,
   type NewOrPatchBallot,
   type PatchElection,
   type VoterId
 } from 'universe/backend/db';
+
+export async function validateElectionInvariants({
+  opensAt,
+  closesAt,
+  _id
+}: Partial<Pick<InternalElection, 'opensAt' | 'closesAt' | '_id'>>) {
+  const { opensAt: opensAt_, closesAt: closesAt_ } =
+    (_id && (await (await getElectionsDb()).findOne({ _id }))) || {};
+
+  opensAt ??= opensAt_;
+  closesAt ??= closesAt_;
+
+  if (opensAt! >= closesAt!) {
+    throw new ValidationError(ErrorMessage.InvariantViolation('opensAt < closesAt'));
+  }
+}
 
 /**
  * Assert that `data` is of type {@link NewElection}.

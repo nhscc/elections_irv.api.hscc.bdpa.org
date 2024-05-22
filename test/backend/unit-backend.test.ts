@@ -150,6 +150,23 @@ describe('::getAllElections', () => {
     );
   });
 
+  it('returns owner=false on provenance mismatch', async () => {
+    expect.hasAssertions();
+
+    await expect(
+      Backend.getAllElections({
+        after_id: undefined,
+        provenance: 'fake'
+      })
+    ).resolves.toStrictEqual(
+      dummyAppData.elections
+        .toReversed()
+        .map((internalElection) =>
+          toPublicElection(internalElection, { owned: false })
+        )
+    );
+  });
+
   it('rejects if after_id is invalid (undefined is okay)', async () => {
     expect.hasAssertions();
 
@@ -170,25 +187,17 @@ describe('::getAllElections', () => {
     });
   });
 
-  it('returns owner=false on provenance mismatch', async () => {
+  it('rejects if provenance is not a string', async () => {
     expect.hasAssertions();
 
     await expect(
       Backend.getAllElections({
         after_id: undefined,
-        provenance: 'fake'
+        provenance: undefined as unknown as string
       })
-    ).resolves.toStrictEqual(
-      dummyAppData.elections
-        .toReversed()
-        .map((internalElection) =>
-          toPublicElection(internalElection, { owned: false })
-        )
-    );
-  });
-
-  it('rejects if provenance is not a string', async () => {
-    expect.hasAssertions();
+    ).rejects.toMatchObject({
+      message: ErrorMessage.BadProvenanceToken()
+    });
   });
 });
 
@@ -279,18 +288,6 @@ describe('::getElection', () => {
     );
   });
 
-  it('rejects if election_id is not found', async () => {
-    expect.hasAssertions();
-
-    const election_id = new ObjectId().toString();
-
-    await expect(
-      Backend.getElection({ election_id, provenance })
-    ).rejects.toMatchObject({
-      message: ErrorMessage.ItemNotFound(election_id, 'election')
-    });
-  });
-
   it('returns owner=false on provenance mismatch', async () => {
     expect.hasAssertions();
 
@@ -306,8 +303,29 @@ describe('::getElection', () => {
     );
   });
 
+  it('rejects if election_id is not found', async () => {
+    expect.hasAssertions();
+
+    const election_id = new ObjectId().toString();
+
+    await expect(
+      Backend.getElection({ election_id, provenance })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.ItemNotFound(election_id, 'election')
+    });
+  });
+
   it('rejects if provenance is not a string', async () => {
     expect.hasAssertions();
+
+    await expect(
+      Backend.getElection({
+        election_id: itemToStringId(dummyAppData.elections[0]),
+        provenance: undefined as unknown as string
+      })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.BadProvenanceToken()
+    });
   });
 });
 
@@ -388,90 +406,83 @@ describe('::createElection', () => {
   it('creates and returns a new owned election', async () => {
     expect.hasAssertions();
 
-    const __provenance = 'fake-owner';
-    const newUser: NewUser = {
-      username: 'new-user',
-      email: 'new-user@email.com',
-      key: '0'.repeat(getEnv().USER_KEY_LENGTH),
-      salt: '0'.repeat(getEnv().USER_SALT_LENGTH),
-      type: 'administrator'
+    const newElection: NewElection = {
+      title: 'title',
+      description: 'description',
+      options: ['option-1', 'option-2'],
+      opensAt: 0,
+      closesAt: 1
     };
 
+    const { title, description, options, opensAt, closesAt } = newElection;
+
     await expect(
-      Backend.createUser({ apiVersion: 1, __provenance, data: newUser })
-    ).resolves.toStrictEqual<PublicUser>({
-      user_id: expect.any(String),
-      username: newUser.username,
-      email: newUser.email,
-      salt: newUser.salt,
-      type: 'administrator',
-      sections: {
-        about: null,
-        education: [],
-        experience: [],
-        skills: [],
-        volunteering: []
-      },
-      views: 0,
-      createdAt: mockDateNowMs,
-      updatedAt: mockDateNowMs
+      Backend.createElection({ data: newElection, provenance })
+    ).resolves.toStrictEqual<PublicElection>({
+      election_id: expect.any(String),
+      title,
+      description,
+      options,
+      createdAt: Date.now(),
+      opensAt,
+      closesAt,
+      deleted: false,
+      owned: true
     });
 
-    await expect((await getUsersDb()).countDocuments(newUser)).resolves.toBe(1);
+    await expect((await getElectionsDb()).countDocuments(newElection)).resolves.toBe(
+      1
+    );
   });
 
   it('supports creating elections with empty descriptions and options', async () => {
     expect.hasAssertions();
 
-    const __provenance = 'fake-owner';
-    const newUser: NewUser = {
-      username: 'new-user',
-      email: 'new-user@email.com',
-      key: '0'.repeat(getEnv().USER_KEY_LENGTH),
-      salt: '0'.repeat(getEnv().USER_SALT_LENGTH),
-      type: 'administrator'
+    const newElection: NewElection = {
+      title: 'title',
+      description: '',
+      options: [],
+      opensAt: 0,
+      closesAt: 1
     };
 
+    const { title, description, options, opensAt, closesAt } = newElection;
+
     await expect(
-      Backend.createUser({ apiVersion: 1, __provenance, data: newUser })
-    ).resolves.toStrictEqual<PublicUser>({
-      user_id: expect.any(String),
-      username: newUser.username,
-      email: newUser.email,
-      salt: newUser.salt,
-      type: 'administrator',
-      sections: {
-        about: null,
-        education: [],
-        experience: [],
-        skills: [],
-        volunteering: []
-      },
-      views: 0,
-      createdAt: mockDateNowMs,
-      updatedAt: mockDateNowMs
+      Backend.createElection({ data: newElection, provenance })
+    ).resolves.toStrictEqual<PublicElection>({
+      election_id: expect.any(String),
+      title,
+      description,
+      options,
+      createdAt: Date.now(),
+      opensAt,
+      closesAt,
+      deleted: false,
+      owned: true
     });
 
-    await expect((await getUsersDb()).countDocuments(newUser)).resolves.toBe(1);
+    await expect((await getElectionsDb()).countDocuments(newElection)).resolves.toBe(
+      1
+    );
   });
 
   it('rejects if provenance is not a string', async () => {
     expect.hasAssertions();
 
     await expect(
-      Backend.createUser({
-        apiVersion: 1,
+      Backend.createElection({
         data: {
-          username: 'test-user',
-          email: 'new-user@email.com',
-          key: '0'.repeat(getEnv().USER_KEY_LENGTH),
-          salt: '0'.repeat(getEnv().USER_SALT_LENGTH),
-          type: 'administrator'
+          title: 'title',
+          description: '',
+          options: [],
+          opensAt: 0,
+          closesAt: 1
         },
-        __provenance: undefined as unknown as string
+        provenance: undefined as unknown as string
       })
     ).rejects.toMatchObject({
-      message: expect.stringMatching(/invalid provenance/)
+      message: ErrorMessage.BadProvenanceToken()
     });
   });
 
@@ -479,17 +490,33 @@ describe('::createElection', () => {
     expect.hasAssertions();
 
     await expect(
-      Backend.createOpportunity({
-        apiVersion: 1,
+      Backend.createElection({
+        provenance,
         data: {
-          title: 'new opportunity',
-          contents: '',
-          creator_id: itemToStringId(dummyAppData.users[0])
-        },
-        __provenance: undefined as unknown as string
+          title: 'title',
+          description: '',
+          options: [],
+          opensAt: 0,
+          closesAt: 0
+        }
       })
     ).rejects.toMatchObject({
-      message: expect.stringMatching(/invalid provenance/)
+      message: ErrorMessage.InvariantViolation('opensAt < closesAt')
+    });
+
+    await expect(
+      Backend.createElection({
+        provenance,
+        data: {
+          title: 'title',
+          description: '',
+          options: [],
+          opensAt: 2,
+          closesAt: 1
+        }
+      })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.InvariantViolation('opensAt < closesAt')
     });
   });
 
@@ -497,20 +524,19 @@ describe('::createElection', () => {
     expect.hasAssertions();
 
     await expect(
-      Backend.updateUser({
-        apiVersion: 1,
-        user_id: itemToStringId(dummyAppData.users[1]),
-        data: { email: dummyAppData.users[0].email }
+      Backend.createElection({
+        provenance,
+        data: {
+          title: 'title',
+          description: '',
+          options: ['1', '1'],
+          opensAt: 0,
+          closesAt: 1
+        }
       })
-    ).rejects.toMatchObject({ message: ErrorMessage.DuplicateFieldValue('email') });
-
-    await expect(
-      Backend.updateUser({
-        apiVersion: 1,
-        user_id: itemToStringId(dummyAppData.users[1]),
-        data: { email: dummyAppData.users[1].email }
-      })
-    ).resolves.toBeUndefined();
+    ).rejects.toMatchObject({
+      message: ErrorMessage.DuplicateArrayValue('1')
+    });
   });
 
   it('rejects if data is invalid or contains properties that violate limits', async () => {
@@ -525,224 +551,225 @@ describe('::createElection', () => {
       USER_KEY_LENGTH: keyLength
     } = getEnv();
 
-    const newUsers: [Parameters<typeof Backend.createUser>[0]['data'], string][] = [
-      [undefined, ErrorMessage.InvalidJSON()],
-      ['string data', ErrorMessage.InvalidJSON()],
+    const newUsers: [Parameters<typeof Backend.createElection>[0]['data'], string][] =
       [
-        {} as NewUser,
-        ErrorMessage.InvalidStringLength(
-          'email',
-          minELength,
-          maxELength,
-          'valid email address'
-        )
-      ],
-      [
-        { email: null } as unknown as NewUser,
-        ErrorMessage.InvalidStringLength(
-          'email',
-          minELength,
-          maxELength,
-          'valid email address'
-        )
-      ],
-      [
-        { email: 'x'.repeat(minELength - 1) },
-        ErrorMessage.InvalidStringLength(
-          'email',
-          minELength,
-          maxELength,
-          'valid email address'
-        )
-      ],
-      [
-        { email: 'x'.repeat(maxELength + 1) },
-        ErrorMessage.InvalidStringLength(
-          'email',
-          minELength,
-          maxELength,
-          'valid email address'
-        )
-      ],
-      [
-        { email: 'x'.repeat(maxELength) },
-        ErrorMessage.InvalidStringLength(
-          'email',
-          minELength,
-          maxELength,
-          'valid email address'
-        )
-      ],
-      [
-        { email: 'valid@email.address' },
-        ErrorMessage.InvalidStringLength('salt', saltLength, null, 'hexadecimal')
-      ],
-      [
-        {
-          email: 'valid@email.address',
-          salt: '0'.repeat(saltLength - 1)
-        },
-        ErrorMessage.InvalidStringLength('salt', saltLength, null, 'hexadecimal')
-      ],
-      [
-        {
-          email: 'valid@email.address',
-          salt: null
-        } as unknown as NewUser,
-        ErrorMessage.InvalidStringLength('salt', saltLength, null, 'hexadecimal')
-      ],
-      [
-        {
-          email: 'valid@email.address',
-          salt: 'x'.repeat(saltLength)
-        },
-        ErrorMessage.InvalidStringLength('salt', saltLength, null, 'hexadecimal')
-      ],
-      [
-        {
-          email: 'valid@email.address',
-          salt: '0'.repeat(saltLength)
-        },
-        ErrorMessage.InvalidStringLength('key', keyLength, null, 'hexadecimal')
-      ],
-      [
-        {
-          email: 'valid@email.address',
-          salt: '0'.repeat(saltLength),
-          key: '0'.repeat(keyLength - 1)
-        },
-        ErrorMessage.InvalidStringLength('key', keyLength, null, 'hexadecimal')
-      ],
-      [
-        {
-          email: 'valid@email.address',
-          salt: '0'.repeat(saltLength),
-          // * Not hexadecimal
-          key: 'x'.repeat(keyLength)
-        },
-        ErrorMessage.InvalidStringLength('key', keyLength, null, 'hexadecimal')
-      ],
-      [
-        {
-          username: 'must be alphanumeric',
-          email: 'valid@email.address',
-          salt: '0'.repeat(saltLength),
-          key: '0'.repeat(keyLength),
-          type: 'administrator'
-        },
-        ErrorMessage.InvalidStringLength(
-          'username',
-          minULength,
-          maxULength,
-          'lowercase alphanumeric'
-        )
-      ],
-      [
-        {
-          username: 'must-be-@lphanumeric',
-          email: 'valid@email.address',
-          salt: '0'.repeat(saltLength),
-          key: '0'.repeat(keyLength),
-          type: 'administrator'
-        },
-        ErrorMessage.InvalidStringLength(
-          'username',
-          minULength,
-          maxULength,
-          'lowercase alphanumeric'
-        )
-      ],
-      [
-        {
-          username: 'must-be-LOWERCASE',
-          email: 'valid@email.address',
-          salt: '0'.repeat(saltLength),
-          key: '0'.repeat(keyLength),
-          type: 'administrator'
-        },
-        ErrorMessage.InvalidStringLength(
-          'username',
-          minULength,
-          maxULength,
-          'lowercase alphanumeric'
-        )
-      ],
-      [
-        {
-          username: '#&*@^(#@(^$&*#',
-          email: 'valid@email.address',
-          salt: '0'.repeat(saltLength),
-          key: '0'.repeat(keyLength),
-          type: 'administrator'
-        },
-        ErrorMessage.InvalidStringLength(
-          'username',
-          minULength,
-          maxULength,
-          'lowercase alphanumeric'
-        )
-      ],
-      [
-        {
-          username: 'x'.repeat(minULength - 1),
-          email: 'valid@email.address',
-          salt: '0'.repeat(saltLength),
-          key: '0'.repeat(keyLength),
-          type: 'administrator'
-        },
-        ErrorMessage.InvalidStringLength(
-          'username',
-          minULength,
-          maxULength,
-          'lowercase alphanumeric'
-        )
-      ],
-      [
-        {
-          username: 'x'.repeat(maxULength + 1),
-          email: 'valid@email.address',
-          salt: '0'.repeat(saltLength),
-          key: '0'.repeat(keyLength),
-          type: 'administrator'
-        },
-        ErrorMessage.InvalidStringLength(
-          'username',
-          minULength,
-          maxULength,
-          'lowercase alphanumeric'
-        )
-      ],
-      [
-        {
-          username: 'user',
-          email: 'valid@email.address',
-          salt: '0'.repeat(saltLength),
-          key: '0'.repeat(keyLength)
-        },
-        ErrorMessage.InvalidFieldValue('type', 'undefined', userTypes)
-      ],
-      [
-        {
-          username: 'user',
-          email: 'valid@email.address',
-          salt: '0'.repeat(saltLength),
-          key: '0'.repeat(keyLength),
-          type: 'bad-type'
-        },
-        ErrorMessage.InvalidFieldValue('type', 'bad-type', userTypes)
-      ],
-      [
-        {
-          username: 'user',
-          email: 'valid@email.address',
-          salt: '0'.repeat(saltLength),
-          key: '0'.repeat(keyLength),
-          type: 'administrator',
-          blogName: 'some-blog'
-        } as unknown as NewUser,
-        ErrorMessage.UnknownField('blogName')
-      ]
-    ];
+        [undefined, ErrorMessage.InvalidJSON()],
+        ['string data', ErrorMessage.InvalidJSON()],
+        [
+          {} as NewUser,
+          ErrorMessage.InvalidStringLength(
+            'email',
+            minELength,
+            maxELength,
+            'valid email address'
+          )
+        ],
+        [
+          { email: null } as unknown as NewUser,
+          ErrorMessage.InvalidStringLength(
+            'email',
+            minELength,
+            maxELength,
+            'valid email address'
+          )
+        ],
+        [
+          { email: 'x'.repeat(minELength - 1) },
+          ErrorMessage.InvalidStringLength(
+            'email',
+            minELength,
+            maxELength,
+            'valid email address'
+          )
+        ],
+        [
+          { email: 'x'.repeat(maxELength + 1) },
+          ErrorMessage.InvalidStringLength(
+            'email',
+            minELength,
+            maxELength,
+            'valid email address'
+          )
+        ],
+        [
+          { email: 'x'.repeat(maxELength) },
+          ErrorMessage.InvalidStringLength(
+            'email',
+            minELength,
+            maxELength,
+            'valid email address'
+          )
+        ],
+        [
+          { email: 'valid@email.address' },
+          ErrorMessage.InvalidStringLength('salt', saltLength, null, 'hexadecimal')
+        ],
+        [
+          {
+            email: 'valid@email.address',
+            salt: '0'.repeat(saltLength - 1)
+          },
+          ErrorMessage.InvalidStringLength('salt', saltLength, null, 'hexadecimal')
+        ],
+        [
+          {
+            email: 'valid@email.address',
+            salt: null
+          } as unknown as NewUser,
+          ErrorMessage.InvalidStringLength('salt', saltLength, null, 'hexadecimal')
+        ],
+        [
+          {
+            email: 'valid@email.address',
+            salt: 'x'.repeat(saltLength)
+          },
+          ErrorMessage.InvalidStringLength('salt', saltLength, null, 'hexadecimal')
+        ],
+        [
+          {
+            email: 'valid@email.address',
+            salt: '0'.repeat(saltLength)
+          },
+          ErrorMessage.InvalidStringLength('key', keyLength, null, 'hexadecimal')
+        ],
+        [
+          {
+            email: 'valid@email.address',
+            salt: '0'.repeat(saltLength),
+            key: '0'.repeat(keyLength - 1)
+          },
+          ErrorMessage.InvalidStringLength('key', keyLength, null, 'hexadecimal')
+        ],
+        [
+          {
+            email: 'valid@email.address',
+            salt: '0'.repeat(saltLength),
+            // * Not hexadecimal
+            key: 'x'.repeat(keyLength)
+          },
+          ErrorMessage.InvalidStringLength('key', keyLength, null, 'hexadecimal')
+        ],
+        [
+          {
+            username: 'must be alphanumeric',
+            email: 'valid@email.address',
+            salt: '0'.repeat(saltLength),
+            key: '0'.repeat(keyLength),
+            type: 'administrator'
+          },
+          ErrorMessage.InvalidStringLength(
+            'username',
+            minULength,
+            maxULength,
+            'lowercase alphanumeric'
+          )
+        ],
+        [
+          {
+            username: 'must-be-@lphanumeric',
+            email: 'valid@email.address',
+            salt: '0'.repeat(saltLength),
+            key: '0'.repeat(keyLength),
+            type: 'administrator'
+          },
+          ErrorMessage.InvalidStringLength(
+            'username',
+            minULength,
+            maxULength,
+            'lowercase alphanumeric'
+          )
+        ],
+        [
+          {
+            username: 'must-be-LOWERCASE',
+            email: 'valid@email.address',
+            salt: '0'.repeat(saltLength),
+            key: '0'.repeat(keyLength),
+            type: 'administrator'
+          },
+          ErrorMessage.InvalidStringLength(
+            'username',
+            minULength,
+            maxULength,
+            'lowercase alphanumeric'
+          )
+        ],
+        [
+          {
+            username: '#&*@^(#@(^$&*#',
+            email: 'valid@email.address',
+            salt: '0'.repeat(saltLength),
+            key: '0'.repeat(keyLength),
+            type: 'administrator'
+          },
+          ErrorMessage.InvalidStringLength(
+            'username',
+            minULength,
+            maxULength,
+            'lowercase alphanumeric'
+          )
+        ],
+        [
+          {
+            username: 'x'.repeat(minULength - 1),
+            email: 'valid@email.address',
+            salt: '0'.repeat(saltLength),
+            key: '0'.repeat(keyLength),
+            type: 'administrator'
+          },
+          ErrorMessage.InvalidStringLength(
+            'username',
+            minULength,
+            maxULength,
+            'lowercase alphanumeric'
+          )
+        ],
+        [
+          {
+            username: 'x'.repeat(maxULength + 1),
+            email: 'valid@email.address',
+            salt: '0'.repeat(saltLength),
+            key: '0'.repeat(keyLength),
+            type: 'administrator'
+          },
+          ErrorMessage.InvalidStringLength(
+            'username',
+            minULength,
+            maxULength,
+            'lowercase alphanumeric'
+          )
+        ],
+        [
+          {
+            username: 'user',
+            email: 'valid@email.address',
+            salt: '0'.repeat(saltLength),
+            key: '0'.repeat(keyLength)
+          },
+          ErrorMessage.InvalidFieldValue('type', 'undefined', userTypes)
+        ],
+        [
+          {
+            username: 'user',
+            email: 'valid@email.address',
+            salt: '0'.repeat(saltLength),
+            key: '0'.repeat(keyLength),
+            type: 'bad-type'
+          },
+          ErrorMessage.InvalidFieldValue('type', 'bad-type', userTypes)
+        ],
+        [
+          {
+            username: 'user',
+            email: 'valid@email.address',
+            salt: '0'.repeat(saltLength),
+            key: '0'.repeat(keyLength),
+            type: 'administrator',
+            blogName: 'some-blog'
+          } as unknown as NewUser,
+          ErrorMessage.UnknownField('blogName')
+        ]
+      ];
 
     await expectExceptionsWithMatchingErrors(
       [
@@ -782,7 +809,7 @@ describe('::createElection', () => {
         ]
       ],
       (data) =>
-        Backend.createUser({ apiVersion: 1, data, __provenance: 'fake-owner' })
+        Backend.createElection({ apiVersion: 1, data, __provenance: 'fake-owner' })
     );
 
     await expectExceptionsWithMatchingErrors(
@@ -827,7 +854,7 @@ describe('::createElection', () => {
         ]
       ],
       (data) =>
-        Backend.createUser({ apiVersion: 2, data, __provenance: 'fake-owner' })
+        Backend.createElection({ apiVersion: 2, data, __provenance: 'fake-owner' })
     );
   });
 });
@@ -904,7 +931,7 @@ describe('::upsertBallot', () => {
         __provenance: undefined as unknown as string
       })
     ).rejects.toMatchObject({
-      message: expect.stringMatching(/invalid provenance/)
+      message: ErrorMessage.BadProvenanceToken()
     });
   });
 
@@ -922,7 +949,7 @@ describe('::upsertBallot', () => {
         __provenance: undefined as unknown as string
       })
     ).rejects.toMatchObject({
-      message: expect.stringMatching(/invalid provenance/)
+      message: ErrorMessage.BadProvenanceToken()
     });
   });
 
@@ -940,7 +967,7 @@ describe('::upsertBallot', () => {
         __provenance: undefined as unknown as string
       })
     ).rejects.toMatchObject({
-      message: expect.stringMatching(/invalid provenance/)
+      message: ErrorMessage.BadProvenanceToken()
     });
   });
 
@@ -1104,7 +1131,7 @@ describe('::updateElection', () => {
         __provenance: undefined as unknown as string
       })
     ).rejects.toMatchObject({
-      message: expect.stringMatching(/invalid provenance/)
+      message: ErrorMessage.BadProvenanceToken()
     });
   });
 
@@ -1122,7 +1149,7 @@ describe('::updateElection', () => {
         __provenance: undefined as unknown as string
       })
     ).rejects.toMatchObject({
-      message: expect.stringMatching(/invalid provenance/)
+      message: ErrorMessage.BadProvenanceToken()
     });
   });
 
@@ -1140,7 +1167,7 @@ describe('::updateElection', () => {
         __provenance: undefined as unknown as string
       })
     ).rejects.toMatchObject({
-      message: expect.stringMatching(/invalid provenance/)
+      message: ErrorMessage.BadProvenanceToken()
     });
   });
 
@@ -1594,7 +1621,7 @@ describe('::deleteElection', () => {
         __provenance: undefined as unknown as string
       })
     ).rejects.toMatchObject({
-      message: expect.stringMatching(/invalid provenance/)
+      message: ErrorMessage.BadProvenanceToken()
     });
   });
 
@@ -1612,7 +1639,7 @@ describe('::deleteElection', () => {
         __provenance: undefined as unknown as string
       })
     ).rejects.toMatchObject({
-      message: expect.stringMatching(/invalid provenance/)
+      message: ErrorMessage.BadProvenanceToken()
     });
   });
 
@@ -1633,55 +1660,6 @@ describe('::deleteElection', () => {
     await expect(Backend.deleteUser({ user_id })).rejects.toMatchObject({
       message: ErrorMessage.ItemNotFound(user_id, 'user')
     });
-  });
-});
-
-describe('::superDeleteElectionAndRelatedBallots', () => {
-  it('permanently deletes an election and all its ballots', async () => {
-    expect.hasAssertions();
-
-    const opportunitiesDb = await getOpportunitiesDb();
-
-    await expect(
-      opportunitiesDb.countDocuments({
-        _id: itemToObjectId(dummyAppData.opportunities[0])
-      })
-    ).resolves.toBe(1);
-
-    await expect(
-      Backend.deleteOpportunity({
-        opportunity_id: itemToStringId(dummyAppData.opportunities[0])
-      })
-    ).resolves.toBeUndefined();
-
-    await expect(
-      opportunitiesDb.countDocuments({
-        _id: itemToObjectId(dummyAppData.opportunities[0])
-      })
-    ).resolves.toBe(0);
-  });
-
-  it('rejects if the election_id is undefined, invalid, or not found', async () => {
-    expect.hasAssertions();
-
-    await expect(
-      Backend.deleteOpportunity({ opportunity_id: 'does-not-exist' })
-    ).rejects.toMatchObject({
-      message: ErrorMessage.InvalidObjectId('does-not-exist')
-    });
-
-    await expect(
-      Backend.deleteOpportunity({ opportunity_id: undefined })
-    ).rejects.toMatchObject({
-      message: ErrorMessage.InvalidItem('opportunity_id', 'parameter')
-    });
-
-    const opportunity_id = itemToStringId(new ObjectId());
-    await expect(Backend.deleteOpportunity({ opportunity_id })).rejects.toMatchObject(
-      {
-        message: ErrorMessage.ItemNotFound(opportunity_id, 'opportunity')
-      }
-    );
   });
 });
 
@@ -1724,7 +1702,7 @@ describe('::deleteBallotFromElection', () => {
         __provenance: undefined as unknown as string
       })
     ).rejects.toMatchObject({
-      message: expect.stringMatching(/invalid provenance/)
+      message: ErrorMessage.BadProvenanceToken()
     });
   });
 
@@ -1742,7 +1720,7 @@ describe('::deleteBallotFromElection', () => {
         __provenance: undefined as unknown as string
       })
     ).rejects.toMatchObject({
-      message: expect.stringMatching(/invalid provenance/)
+      message: ErrorMessage.BadProvenanceToken()
     });
   });
 
@@ -1807,5 +1785,54 @@ describe('::deleteBallotFromElection', () => {
     await expect(Backend.deleteArticle({ article_id })).rejects.toMatchObject({
       message: ErrorMessage.ItemNotFound(article_id, 'article')
     });
+  });
+});
+
+describe('::superDeleteElectionAndRelatedBallots', () => {
+  it('permanently deletes an election and all its ballots', async () => {
+    expect.hasAssertions();
+
+    const opportunitiesDb = await getOpportunitiesDb();
+
+    await expect(
+      opportunitiesDb.countDocuments({
+        _id: itemToObjectId(dummyAppData.opportunities[0])
+      })
+    ).resolves.toBe(1);
+
+    await expect(
+      Backend.deleteOpportunity({
+        opportunity_id: itemToStringId(dummyAppData.opportunities[0])
+      })
+    ).resolves.toBeUndefined();
+
+    await expect(
+      opportunitiesDb.countDocuments({
+        _id: itemToObjectId(dummyAppData.opportunities[0])
+      })
+    ).resolves.toBe(0);
+  });
+
+  it('rejects if the election_id is undefined, invalid, or not found', async () => {
+    expect.hasAssertions();
+
+    await expect(
+      Backend.deleteOpportunity({ opportunity_id: 'does-not-exist' })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.InvalidObjectId('does-not-exist')
+    });
+
+    await expect(
+      Backend.deleteOpportunity({ opportunity_id: undefined })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.InvalidItem('opportunity_id', 'parameter')
+    });
+
+    const opportunity_id = itemToStringId(new ObjectId());
+    await expect(Backend.deleteOpportunity({ opportunity_id })).rejects.toMatchObject(
+      {
+        message: ErrorMessage.ItemNotFound(opportunity_id, 'opportunity')
+      }
+    );
   });
 });

@@ -28,6 +28,7 @@ import {
 } from 'universe/backend/db';
 
 import {
+  validateElectionInvariants,
   validateNewElectionData,
   validateNewOrPatchBallotData,
   validatePatchElectionData,
@@ -44,7 +45,7 @@ export async function getAllElections({
   provenance: TokenAttributeOwner;
 }): Promise<PublicElection[]> {
   if (typeof provenance !== 'string') {
-    throw new AppValidationError('invalid provenance token attribute owner');
+    throw new AppValidationError(ErrorMessage.BadProvenanceToken());
   }
 
   const electionsDb = await getElectionsDb();
@@ -109,7 +110,7 @@ export async function getElection({
   provenance: TokenAttributeOwner;
 }): Promise<PublicElection> {
   if (typeof provenance !== 'string') {
-    throw new AppValidationError('invalid provenance token attribute owner');
+    throw new AppValidationError(ErrorMessage.BadProvenanceToken());
   }
 
   const electionsDb = await getElectionsDb();
@@ -198,10 +199,11 @@ export async function createElection({
   provenance: TokenAttributeOwner;
 }): Promise<PublicElection> {
   if (typeof provenance !== 'string') {
-    throw new AppValidationError('invalid provenance token attribute owner');
+    throw new AppValidationError(ErrorMessage.BadProvenanceToken());
   }
 
   validateNewElectionData(data);
+  await validateElectionInvariants(data);
 
   const createdAt = Date.now();
   const electionsDb = await getElectionsDb();
@@ -235,7 +237,7 @@ export async function upsertBallot({
   data: unknown;
 }): Promise<void> {
   if (typeof provenance !== 'string') {
-    throw new AppValidationError('invalid provenance token attribute owner');
+    throw new AppValidationError(ErrorMessage.BadProvenanceToken());
   }
 
   validateVoterId(voter_id);
@@ -302,10 +304,11 @@ export async function updateElection({
   data: unknown;
 }): Promise<void> {
   if (typeof provenance !== 'string') {
-    throw new AppValidationError('invalid provenance token attribute owner');
+    throw new AppValidationError(ErrorMessage.BadProvenanceToken());
   }
 
   validatePatchElectionData(data);
+  await validateElectionInvariants(data);
 
   const electionsDb = await getElectionsDb();
 
@@ -343,7 +346,7 @@ export async function deleteElection({
   provenance: TokenAttributeOwner;
 }): Promise<void> {
   if (typeof provenance !== 'string') {
-    throw new AppValidationError('invalid provenance token attribute owner');
+    throw new AppValidationError(ErrorMessage.BadProvenanceToken());
   }
 
   const electionsDb = await getElectionsDb();
@@ -411,7 +414,7 @@ export async function deleteBallotFromElection({
   provenance: TokenAttributeOwner;
 }): Promise<void> {
   if (typeof provenance !== 'string') {
-    throw new AppValidationError('invalid provenance token attribute owner');
+    throw new AppValidationError(ErrorMessage.BadProvenanceToken());
   }
 
   validateVoterId(voter_id);
@@ -446,9 +449,14 @@ export async function deleteBallotFromElection({
   }
 }
 
+/**
+ * Returns `true` if the given `provenance` matches the election's
+ * `__provenance` property, which implies that the current user is authorized to
+ * mutate the associated resource.
+ */
 async function isProvenant(electionId: ElectionId, provenance: TokenAttributeOwner) {
   const electionsDb = await getElectionsDb();
-  return !!(await electionsDb.countDocuments({
+  return !!(await electionsDb.findOne({
     _id: electionId,
     __provenance: provenance
   }));

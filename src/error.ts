@@ -58,7 +58,7 @@ export const ErrorMessage = {
         : 'a missing, invalid, or illegal value'
     }${validValues ? `. Valid values: ${validValues.join(', ')}` : ''}`,
   InvalidJSON: (property?: string) =>
-    'encountered invalid JSON' + (property ? ` in property ${property}` : ''),
+    'encountered invalid JSON' + (property ? ` in property \`${property}\`` : ''),
   EmptyJSONBody: () => 'encountered unexpectedly empty JSON object in request body',
   InvalidNumberValue: (
     property: string,
@@ -105,6 +105,8 @@ export const ErrorMessage = {
     }specifier value type (must be ${type})`,
   InvalidRegexString: (property: string) =>
     `\`${property}\` has invalid or illegal regex value`,
+  BadProvenanceToken: () => 'invalid provenance token attribute owner',
+  InvariantViolation: (invariant: string) => `invariant violated: ${invariant}`,
   IllegalOperation: () =>
     'this user is not authorized to execute operations on this item',
   // 'navLinks', 0, 5, 'navigation links'
@@ -112,7 +114,5 @@ export const ErrorMessage = {
     return `resource limit reached${resource ? `: ${resource}` : ''}${
       max !== undefined ? ` (exceeded maximum of ${max})` : ''
     }`;
-  },
-  IllegalCyclicalConnection: () => 'cannot create a cyclical connection',
-  InvalidSessionViewCombination: () => 'invalid combination of view and viewed_id'
+  }
 };
