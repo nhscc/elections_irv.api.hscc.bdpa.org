@@ -7,6 +7,10 @@ import type { Environment } from 'multiverse/next-env';
 // TODO: replace validation logic with zod instead (including defaults) and
 // TODO: integrate that logic with expect-env (also zod-based)
 
+// TODO: fix the badness that happens when trying to reference a non-existent
+// TODO: key from getEnv() (right now it says something like Primitive |
+// TODO: Primitive[] when it should be never)
+
 /**
  * Returns an object representing the application's runtime environment.
  */
