@@ -56,3 +56,13 @@ it('is verbose when no DEBUG environment variable set and compiled NODE_ENV is n
     expect(infoSpy).not.toHaveBeenCalled();
   });
 });
+
+it('initializes the database as expected', async () => {
+  expect.hasAssertions();
+
+  await withMockedOutput(async () => {
+    await withMockedEnv(() => importInitializeData({ expectedExitCode: 0 }), {
+      TEST_PROMPTER_INITIALIZER: 'action=commit-force'
+    });
+  });
+});

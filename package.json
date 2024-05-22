@@ -94,6 +94,7 @@
     "@babel/eslint-parser": "^7.24.5",
     "@commitlint/cli": "^19.3.0",
     "@commitlint/config-conventional": "^19.2.2",
+    "@faker-js/faker": "^8.4.1",
     "@next/eslint-plugin-next": "^14.2.3",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/exec": "^6.0.3",

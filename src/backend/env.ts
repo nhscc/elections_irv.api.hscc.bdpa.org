@@ -15,10 +15,10 @@ export function getEnv<T extends Environment = Environment>() {
   const env = getDefaultEnv({
     MAX_PARAMS_PER_REQUEST: Number(process.env.MAX_PARAMS_PER_REQUEST) || 100,
     MIN_ELECTION_TITLE_LENGTH: Number(process.env.MIN_ELECTION_TITLE_LENGTH) || 4,
-    MAX_ELECTION_TITLE_LENGTH: Number(process.env.MAX_ELECTION_TITLE_LENGTH) || 72,
+    MAX_ELECTION_TITLE_LENGTH: Number(process.env.MAX_ELECTION_TITLE_LENGTH) || 144,
     MAX_ELECTION_DESC_LENGTH: Number(process.env.MAX_ELECTION_DESC_LENGTH) || 200,
     MAX_ELECTION_OPTIONS_ITEMS: Number(process.env.MAX_ELECTION_OPTIONS_ITEMS) || 50,
-    MAX_ELECTION_OPTION_LENGTH: Number(process.env.MAX_ELECTION_OPTION_LENGTH) || 30,
+    MAX_ELECTION_OPTION_LENGTH: Number(process.env.MAX_ELECTION_OPTION_LENGTH) || 60,
     MAX_VOTERID_LENGTH: Number(process.env.MAX_VOTERID_LENGTH) || 24,
     MAX_BALLOTS_PER_ELECTION: Number(process.env.MAX_BALLOTS_PER_ELECTION) || 100,
 
