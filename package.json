@@ -1,6 +1,6 @@
 {
   "name": "elections_irv.api.hscc.bdpa.org",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "private": true,
   "description": "https://elections-irv.api.hscc.bdpa.org",
   "homepage": "https://elections-irv.api.hscc.bdpa.org",
@@ -22,7 +22,7 @@
     "build:externals": "NODE_ENV=external webpack --config-name externals",
     "build:stats": "NODE_ENV=production webpack --json > bundle-stats.ignore.json",
     "clean": "git ls-files --exclude-standard --ignored --others --directory | grep -vE '^((\\.(env|vscode|husky))|next-env\\.d\\.ts|node_modules)($|\\/)' | xargs -p rm -rf",
-    "deploy": "npm run deploy:production",
+    "deploy": "npm run deploy:production && npm run deploy:preview",
     "deploy:preview": "url=$(vercel deploy) && vercel alias set \"$url\" elections-irv.preview-api.hscc.bdpa.org",
     "deploy:production": "vercel deploy --prod",
     "dev": "next -p `npx -q acquire-port`",

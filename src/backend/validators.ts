@@ -14,8 +14,9 @@ import {
 export async function validateElectionInvariants({
   opensAt,
   closesAt,
-  _id
-}: Partial<Pick<InternalElection, 'opensAt' | 'closesAt' | '_id'>>) {
+  _id,
+  options
+}: Partial<Pick<InternalElection, 'opensAt' | 'closesAt' | '_id' | 'options'>>) {
   const { opensAt: opensAt_, closesAt: closesAt_ } =
     (_id && (await (await getElectionsDb()).findOne({ _id }))) || {};
 
@@ -24,6 +25,12 @@ export async function validateElectionInvariants({
 
   if (opensAt! >= closesAt!) {
     throw new ValidationError(ErrorMessage.InvariantViolation('opensAt < closesAt'));
+  }
+
+  if (Array.isArray(options) && new Set(options).size !== options.length) {
+    throw new ValidationError(
+      ErrorMessage.InvariantViolation('options must be unique')
+    );
   }
 }
 
@@ -137,7 +144,7 @@ function validateGenericElectionData(
   }
 
   if (Array.isArray(data.options)) {
-    if (data.options.length > MAX_ELECTION_DESC_LENGTH) {
+    if (data.options.length > MAX_ELECTION_OPTIONS_ITEMS) {
       throw new ValidationError(
         ErrorMessage.TooMany('options', MAX_ELECTION_OPTIONS_ITEMS)
       );
@@ -161,7 +168,7 @@ function validateGenericElectionData(
       data.opensAt < 0)
   ) {
     throw new ValidationError(
-      ErrorMessage.InvalidNumberValue('opensAt', 0, null, ' positive integer')
+      ErrorMessage.InvalidNumberValue('opensAt', 0, null, ' non-negative integer')
     );
   }
 
@@ -172,7 +179,7 @@ function validateGenericElectionData(
       data.closesAt < 0)
   ) {
     throw new ValidationError(
-      ErrorMessage.InvalidNumberValue('closesAt', 0, null, ' positive integer')
+      ErrorMessage.InvalidNumberValue('closesAt', 0, null, ' non-negative integer')
     );
   }
 
@@ -239,7 +246,7 @@ function validateGenericBallotData(data: unknown): asserts data is NewOrPatchBal
     ) {
       throw new ValidationError(
         ErrorMessage.InvalidObjectKeyValue('ranking', rank, [
-          `safe positive integers`
+          `safe non-negative integers`
         ])
       );
     }

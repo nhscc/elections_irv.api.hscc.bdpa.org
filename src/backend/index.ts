@@ -254,7 +254,7 @@ export async function upsertBallot({
     throw new ItemNotFoundError(election_id, 'election');
   }
 
-  if (!isProvenant(electionId, provenance)) {
+  if (!(await isProvenant(electionId, provenance))) {
     throw new NotAuthorizedError();
   }
 
@@ -320,7 +320,7 @@ export async function updateElection({
     throw new ItemNotFoundError(election_id, 'election');
   }
 
-  if (!isProvenant(electionId, provenance)) {
+  if (!(await isProvenant(electionId, provenance))) {
     throw new NotAuthorizedError();
   }
 
@@ -359,7 +359,7 @@ export async function deleteElection({
     throw new ItemNotFoundError(election_id, 'election');
   }
 
-  if (!isProvenant(electionId, provenance)) {
+  if (!(await isProvenant(electionId, provenance))) {
     throw new NotAuthorizedError();
   }
 
@@ -430,7 +430,7 @@ export async function deleteBallotFromElection({
     throw new ItemNotFoundError(election_id, 'election');
   }
 
-  if (!isProvenant(electionId, provenance)) {
+  if (!(await isProvenant(electionId, provenance))) {
     throw new NotAuthorizedError();
   }
 

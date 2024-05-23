@@ -5,7 +5,7 @@ import assert from 'node:assert';
 
 import * as Backend from 'universe/backend';
 import { getEnv } from 'universe/backend/env';
-import { ErrorMessage, TrialError } from 'universe/error';
+import { ErrorMessage } from 'universe/error';
 
 import {
   getBallotsDb,
@@ -26,7 +26,6 @@ import {
   type VoterId
 } from 'universe/backend/db';
 
-import { isPlainObject } from 'multiverse/is-plain-object';
 import { expectExceptionsWithMatchingErrors } from 'multiverse/jest-expect-matching-errors';
 import { itemToObjectId, itemToStringId } from 'multiverse/mongo-item';
 import { setupMemoryServerOverride } from 'multiverse/mongo-test';
@@ -40,7 +39,7 @@ import {
 import { dummyAppData } from 'testverse/db';
 import { mockEnvFactory } from 'testverse/setup';
 
-import { toss } from 'toss-expression';
+import type { LiteralUnknownUnion } from 'types/global';
 
 setupMemoryServerOverride();
 useMockDateNow();
@@ -535,7 +534,7 @@ describe('::createElection', () => {
         }
       })
     ).rejects.toMatchObject({
-      message: ErrorMessage.DuplicateArrayValue('1')
+      message: ErrorMessage.InvariantViolation('options must be unique')
     });
   });
 
@@ -543,318 +542,159 @@ describe('::createElection', () => {
     expect.hasAssertions();
 
     const {
-      MIN_USER_NAME_LENGTH: minULength,
-      MAX_USER_NAME_LENGTH: maxULength,
-      MIN_USER_EMAIL_LENGTH: minELength,
-      MAX_USER_EMAIL_LENGTH: maxELength,
-      USER_SALT_LENGTH: saltLength,
-      USER_KEY_LENGTH: keyLength
+      MIN_ELECTION_TITLE_LENGTH: minTitle,
+      MAX_ELECTION_TITLE_LENGTH: maxTitle,
+      MAX_ELECTION_DESC_LENGTH: maxDesc,
+      MAX_ELECTION_OPTIONS_ITEMS: maxOptions,
+      MAX_ELECTION_OPTION_LENGTH: maxOption
     } = getEnv();
 
-    const newUsers: [Parameters<typeof Backend.createElection>[0]['data'], string][] =
+    const newElections: [LiteralUnknownUnion<NewElection>, string][] = [
+      [undefined, ErrorMessage.InvalidJSON()],
+      ['string data', ErrorMessage.InvalidJSON()],
+      [{}, ErrorMessage.EmptyJSONBody()],
       [
-        [undefined, ErrorMessage.InvalidJSON()],
-        ['string data', ErrorMessage.InvalidJSON()],
-        [
-          {} as NewUser,
-          ErrorMessage.InvalidStringLength(
-            'email',
-            minELength,
-            maxELength,
-            'valid email address'
-          )
-        ],
-        [
-          { email: null } as unknown as NewUser,
-          ErrorMessage.InvalidStringLength(
-            'email',
-            minELength,
-            maxELength,
-            'valid email address'
-          )
-        ],
-        [
-          { email: 'x'.repeat(minELength - 1) },
-          ErrorMessage.InvalidStringLength(
-            'email',
-            minELength,
-            maxELength,
-            'valid email address'
-          )
-        ],
-        [
-          { email: 'x'.repeat(maxELength + 1) },
-          ErrorMessage.InvalidStringLength(
-            'email',
-            minELength,
-            maxELength,
-            'valid email address'
-          )
-        ],
-        [
-          { email: 'x'.repeat(maxELength) },
-          ErrorMessage.InvalidStringLength(
-            'email',
-            minELength,
-            maxELength,
-            'valid email address'
-          )
-        ],
-        [
-          { email: 'valid@email.address' },
-          ErrorMessage.InvalidStringLength('salt', saltLength, null, 'hexadecimal')
-        ],
-        [
-          {
-            email: 'valid@email.address',
-            salt: '0'.repeat(saltLength - 1)
-          },
-          ErrorMessage.InvalidStringLength('salt', saltLength, null, 'hexadecimal')
-        ],
-        [
-          {
-            email: 'valid@email.address',
-            salt: null
-          } as unknown as NewUser,
-          ErrorMessage.InvalidStringLength('salt', saltLength, null, 'hexadecimal')
-        ],
-        [
-          {
-            email: 'valid@email.address',
-            salt: 'x'.repeat(saltLength)
-          },
-          ErrorMessage.InvalidStringLength('salt', saltLength, null, 'hexadecimal')
-        ],
-        [
-          {
-            email: 'valid@email.address',
-            salt: '0'.repeat(saltLength)
-          },
-          ErrorMessage.InvalidStringLength('key', keyLength, null, 'hexadecimal')
-        ],
-        [
-          {
-            email: 'valid@email.address',
-            salt: '0'.repeat(saltLength),
-            key: '0'.repeat(keyLength - 1)
-          },
-          ErrorMessage.InvalidStringLength('key', keyLength, null, 'hexadecimal')
-        ],
-        [
-          {
-            email: 'valid@email.address',
-            salt: '0'.repeat(saltLength),
-            // * Not hexadecimal
-            key: 'x'.repeat(keyLength)
-          },
-          ErrorMessage.InvalidStringLength('key', keyLength, null, 'hexadecimal')
-        ],
-        [
-          {
-            username: 'must be alphanumeric',
-            email: 'valid@email.address',
-            salt: '0'.repeat(saltLength),
-            key: '0'.repeat(keyLength),
-            type: 'administrator'
-          },
-          ErrorMessage.InvalidStringLength(
-            'username',
-            minULength,
-            maxULength,
-            'lowercase alphanumeric'
-          )
-        ],
-        [
-          {
-            username: 'must-be-@lphanumeric',
-            email: 'valid@email.address',
-            salt: '0'.repeat(saltLength),
-            key: '0'.repeat(keyLength),
-            type: 'administrator'
-          },
-          ErrorMessage.InvalidStringLength(
-            'username',
-            minULength,
-            maxULength,
-            'lowercase alphanumeric'
-          )
-        ],
-        [
-          {
-            username: 'must-be-LOWERCASE',
-            email: 'valid@email.address',
-            salt: '0'.repeat(saltLength),
-            key: '0'.repeat(keyLength),
-            type: 'administrator'
-          },
-          ErrorMessage.InvalidStringLength(
-            'username',
-            minULength,
-            maxULength,
-            'lowercase alphanumeric'
-          )
-        ],
-        [
-          {
-            username: '#&*@^(#@(^$&*#',
-            email: 'valid@email.address',
-            salt: '0'.repeat(saltLength),
-            key: '0'.repeat(keyLength),
-            type: 'administrator'
-          },
-          ErrorMessage.InvalidStringLength(
-            'username',
-            minULength,
-            maxULength,
-            'lowercase alphanumeric'
-          )
-        ],
-        [
-          {
-            username: 'x'.repeat(minULength - 1),
-            email: 'valid@email.address',
-            salt: '0'.repeat(saltLength),
-            key: '0'.repeat(keyLength),
-            type: 'administrator'
-          },
-          ErrorMessage.InvalidStringLength(
-            'username',
-            minULength,
-            maxULength,
-            'lowercase alphanumeric'
-          )
-        ],
-        [
-          {
-            username: 'x'.repeat(maxULength + 1),
-            email: 'valid@email.address',
-            salt: '0'.repeat(saltLength),
-            key: '0'.repeat(keyLength),
-            type: 'administrator'
-          },
-          ErrorMessage.InvalidStringLength(
-            'username',
-            minULength,
-            maxULength,
-            'lowercase alphanumeric'
-          )
-        ],
-        [
-          {
-            username: 'user',
-            email: 'valid@email.address',
-            salt: '0'.repeat(saltLength),
-            key: '0'.repeat(keyLength)
-          },
-          ErrorMessage.InvalidFieldValue('type', 'undefined', userTypes)
-        ],
-        [
-          {
-            username: 'user',
-            email: 'valid@email.address',
-            salt: '0'.repeat(saltLength),
-            key: '0'.repeat(keyLength),
-            type: 'bad-type'
-          },
-          ErrorMessage.InvalidFieldValue('type', 'bad-type', userTypes)
-        ],
-        [
-          {
-            username: 'user',
-            email: 'valid@email.address',
-            salt: '0'.repeat(saltLength),
-            key: '0'.repeat(keyLength),
-            type: 'administrator',
-            blogName: 'some-blog'
-          } as unknown as NewUser,
-          ErrorMessage.UnknownField('blogName')
-        ]
-      ];
-
-    await expectExceptionsWithMatchingErrors(
-      [
-        ...newUsers,
-        [
-          {
-            username: 'user',
-            email: 'valid@email.address',
-            salt: '0'.repeat(saltLength),
-            key: '0'.repeat(keyLength),
-            type: 'administrator',
-            fullName: 'my name'
-          } as NewUser,
-          ErrorMessage.UnknownField('fullName')
-        ],
-        [
-          {
-            username: 'user',
-            email: 'valid@email.address',
-            salt: '0'.repeat(saltLength),
-            key: '0'.repeat(keyLength),
-            type: 'administrator',
-            fullName: 5
-          } as unknown as NewUser,
-          ErrorMessage.UnknownField('fullName')
-        ],
-        [
-          {
-            username: 'user',
-            email: 'valid@email.address',
-            salt: '0'.repeat(saltLength),
-            key: '0'.repeat(keyLength),
-            type: 'administrator',
-            fullName: true
-          } as unknown as NewUser,
-          ErrorMessage.UnknownField('fullName')
-        ]
+        { email: null },
+        ErrorMessage.InvalidStringLength('title', minTitle, maxTitle, 'string')
       ],
-      (data) =>
-        Backend.createElection({ apiVersion: 1, data, __provenance: 'fake-owner' })
-    );
-
-    await expectExceptionsWithMatchingErrors(
       [
-        ...newUsers.map(([data, error]) => {
-          return [
-            isPlainObject(data) ? { ...data, fullName: 'The Rock' } : data,
-            error
-          ] as (typeof newUsers)[number];
-        }),
-        [
-          {
-            username: 'user',
-            email: 'valid@email.address',
-            salt: '0'.repeat(saltLength),
-            key: '0'.repeat(keyLength),
-            type: 'administrator',
-            fullName: 5
-          } as unknown as NewUser,
-          ErrorMessage.InvalidStringLength(
-            'fullName',
-            1,
-            getEnv().MAX_USER_FULLNAME_LENGTH,
-            'alphanumeric (with spaces)'
-          )
-        ],
-        [
-          {
-            username: 'user',
-            email: 'valid@email.address',
-            salt: '0'.repeat(saltLength),
-            key: '0'.repeat(keyLength),
-            type: 'administrator',
-            fullName: true
-          } as unknown as NewUser,
-          ErrorMessage.InvalidStringLength(
-            'fullName',
-            1,
-            getEnv().MAX_USER_FULLNAME_LENGTH,
-            'alphanumeric (with spaces)'
-          )
-        ]
+        { title: 1 },
+        ErrorMessage.InvalidStringLength('title', minTitle, maxTitle, 'string')
       ],
-      (data) =>
-        Backend.createElection({ apiVersion: 2, data, __provenance: 'fake-owner' })
+      [
+        { title: 'x'.repeat(minTitle - 1) },
+        ErrorMessage.InvalidStringLength('title', minTitle, maxTitle, 'string')
+      ],
+      [
+        { title: 'x'.repeat(maxTitle + 1) },
+        ErrorMessage.InvalidStringLength('title', minTitle, maxTitle, 'string')
+      ],
+      [
+        { title: 'x'.repeat(maxTitle) },
+        ErrorMessage.InvalidStringLength('description', 0, maxDesc, 'string')
+      ],
+      [
+        { title: 'valid title', description: 1 },
+        ErrorMessage.InvalidStringLength('description', 0, maxDesc, 'string')
+      ],
+      [
+        { title: 'valid title', description: 'x'.repeat(maxDesc + 1) },
+        ErrorMessage.InvalidStringLength('description', 0, maxDesc, 'string')
+      ],
+      [
+        { title: 'valid title', description: 'x'.repeat(maxDesc), options: 1 },
+        ErrorMessage.InvalidFieldValue('options')
+      ],
+      [
+        {
+          title: 'valid title',
+          description: '',
+          options: ['']
+        },
+        ErrorMessage.InvalidArrayValue('options', '', 0, [
+          `strings of length between 1 and ${maxOption}`
+        ])
+      ],
+      [
+        {
+          title: 'valid title',
+          description: 'valid description',
+          options: ['x'.repeat(maxOption + 1)]
+        },
+        ErrorMessage.InvalidArrayValue('options', 'x'.repeat(maxOption + 1), 0, [
+          `strings of length between 1 and ${maxOption}`
+        ])
+      ],
+      [
+        {
+          title: 'valid title',
+          description: 'valid description',
+          options: ['valid option', '']
+        },
+        ErrorMessage.InvalidArrayValue('options', '', 1, [
+          `strings of length between 1 and ${maxOption}`
+        ])
+      ],
+      [
+        {
+          title: 'valid title',
+          description: 'x'.repeat(maxDesc),
+          options: ('x'.repeat(maxOption) + ',')
+            .repeat(maxOptions + 1)
+            .split(',')
+            .slice(0, -1)
+        },
+        ErrorMessage.TooMany('options', maxOptions)
+      ],
+      [
+        {
+          title: 'valid title',
+          description: 'valid description',
+          options: ['valid option']
+        },
+        ErrorMessage.InvalidNumberValue('opensAt', 0, null, ' non-negative integer')
+      ],
+      [
+        {
+          title: 'valid title',
+          description: 'valid description',
+          options: ['valid option'],
+          opensAt: '1'
+        },
+        ErrorMessage.InvalidNumberValue('opensAt', 0, null, ' non-negative integer')
+      ],
+      [
+        {
+          title: 'valid title',
+          description: 'valid description',
+          options: ['valid option'],
+          opensAt: -1
+        },
+        ErrorMessage.InvalidNumberValue('opensAt', 0, null, ' non-negative integer')
+      ],
+      [
+        {
+          title: 'valid title',
+          description: 'valid description',
+          options: ['valid option'],
+          opensAt: 0
+        },
+        ErrorMessage.InvalidNumberValue('closesAt', 0, null, ' non-negative integer')
+      ],
+      [
+        {
+          title: 'valid title',
+          description: 'valid description',
+          options: ['valid option'],
+          opensAt: 0,
+          closesAt: '1'
+        },
+        ErrorMessage.InvalidNumberValue('closesAt', 0, null, ' non-negative integer')
+      ],
+      [
+        {
+          title: 'valid title',
+          description: 'valid description',
+          options: ['valid option'],
+          opensAt: 0,
+          closesAt: -1
+        },
+        ErrorMessage.InvalidNumberValue('closesAt', 0, null, ' non-negative integer')
+      ],
+      [
+        {
+          title: 'valid title',
+          description: 'valid description',
+          options: ['valid option'],
+          opensAt: 0,
+          closesAt: 0
+        },
+        ErrorMessage.InvariantViolation('opensAt < closesAt')
+      ]
+    ];
+
+    await expectExceptionsWithMatchingErrors(newElections, (data) =>
+      Backend.createElection({ data, provenance: 'fake-owner' })
     );
   });
 });
@@ -863,75 +703,68 @@ describe('::upsertBallot', () => {
   it('creates a new ballot if voter_id does not exist', async () => {
     expect.hasAssertions();
 
-    const __provenance = 'fake-owner';
-    const newOpportunity: NewOpportunity = {
-      title: 'new opportunity',
-      contents: '',
-      creator_id: itemToStringId(dummyAppData.users[0])
+    const newBallot: NewOrPatchBallot = {
+      ranking: { a: 1, b: 2 }
     };
 
-    await expect(
-      Backend.createOpportunity({ apiVersion: 1, __provenance, data: newOpportunity })
-    ).resolves.toStrictEqual<PublicOpportunity>({
-      ...newOpportunity,
-      opportunity_id: expect.any(String),
-      views: 0,
-      createdAt: mockDateNowMs,
-      updatedAt: mockDateNowMs
-    });
-
-    // @ts-expect-error: for testing purposes
-    delete newOpportunity.creator_id;
+    const election_id = itemToStringId(dummyAppData.elections[0]);
+    const voter_id = 'fake-id';
 
     await expect(
-      (await getOpportunitiesDb()).countDocuments(newOpportunity)
-    ).resolves.toBe(1);
+      Backend.upsertBallot({ election_id, data: newBallot, voter_id, provenance })
+    ).resolves.toBeUndefined();
+
+    await expect((await getBallotsDb()).countDocuments(newBallot)).resolves.toBe(1);
   });
 
   it('updates an existing ballot if voter_id already exists', async () => {
     expect.hasAssertions();
 
-    const __provenance = 'fake-owner';
-    const newOpportunity: NewOpportunity = {
-      title: 'new opportunity',
-      contents: 'stuff',
-      creator_id: itemToStringId(dummyAppData.users[0])
+    const election_id = itemToStringId(dummyAppData.elections[0]);
+    const voter_id = 'fake-id';
+
+    const newBallot: NewOrPatchBallot = {
+      ranking: { a: 1, b: 2 }
+    };
+
+    const updatedBallot: NewOrPatchBallot = {
+      ranking: { a: 50, b: 100 }
     };
 
     await expect(
-      Backend.createOpportunity({ apiVersion: 2, __provenance, data: newOpportunity })
-    ).resolves.toStrictEqual<PublicOpportunity>({
-      ...newOpportunity,
-      opportunity_id: expect.any(String),
-      views: 0,
-      sessions: 0,
-      createdAt: mockDateNowMs,
-      updatedAt: mockDateNowMs
-    });
+      Backend.upsertBallot({ election_id, data: newBallot, voter_id, provenance })
+    ).resolves.toBeUndefined();
 
-    // @ts-expect-error: for testing purposes
-    delete newOpportunity.creator_id;
+    await expect((await getBallotsDb()).countDocuments(newBallot)).resolves.toBe(1);
 
     await expect(
-      (await getOpportunitiesDb()).countDocuments(newOpportunity)
-    ).resolves.toBe(1);
+      Backend.upsertBallot({ election_id, data: updatedBallot, voter_id, provenance })
+    ).resolves.toBeUndefined();
+
+    await expect((await getBallotsDb()).countDocuments(updatedBallot)).resolves.toBe(
+      1
+    );
+
+    await expect((await getBallotsDb()).countDocuments(newBallot)).resolves.toBe(0);
   });
 
   it('rejects if ranking is empty', async () => {
     expect.hasAssertions();
 
     await expect(
-      Backend.createOpportunity({
-        apiVersion: 1,
-        data: {
-          title: 'new opportunity',
-          contents: '',
-          creator_id: itemToStringId(dummyAppData.users[0])
-        },
-        __provenance: undefined as unknown as string
+      Backend.upsertBallot({
+        election_id: itemToStringId(dummyAppData.elections[0]),
+        data: { ranking: {} },
+        voter_id: 'fake-id',
+        provenance
       })
     ).rejects.toMatchObject({
-      message: ErrorMessage.BadProvenanceToken()
+      message: ErrorMessage.InvalidLength(
+        'ranking',
+        0,
+        1,
+        getEnv().MAX_ELECTION_OPTIONS_ITEMS
+      )
     });
   });
 
@@ -939,17 +772,14 @@ describe('::upsertBallot', () => {
     expect.hasAssertions();
 
     await expect(
-      Backend.createOpportunity({
-        apiVersion: 1,
-        data: {
-          title: 'new opportunity',
-          contents: '',
-          creator_id: itemToStringId(dummyAppData.users[0])
-        },
-        __provenance: undefined as unknown as string
+      Backend.upsertBallot({
+        election_id: itemToStringId(dummyAppData.elections[0]),
+        data: { ranking: { a: 1 } },
+        voter_id: 'fake-id',
+        provenance: 'fake-provenance'
       })
     ).rejects.toMatchObject({
-      message: ErrorMessage.BadProvenanceToken()
+      message: ErrorMessage.NotAuthorized()
     });
   });
 
@@ -957,14 +787,11 @@ describe('::upsertBallot', () => {
     expect.hasAssertions();
 
     await expect(
-      Backend.createOpportunity({
-        apiVersion: 1,
-        data: {
-          title: 'new opportunity',
-          contents: '',
-          creator_id: itemToStringId(dummyAppData.users[0])
-        },
-        __provenance: undefined as unknown as string
+      Backend.upsertBallot({
+        election_id: itemToStringId(dummyAppData.elections[0]),
+        data: { ranking: { a: 1 } },
+        voter_id: 'fake-id',
+        provenance: undefined as unknown as string
       })
     ).rejects.toMatchObject({
       message: ErrorMessage.BadProvenanceToken()
@@ -982,55 +809,55 @@ describe('::upsertBallot', () => {
     } = getEnv();
 
     const newOpportunities: [
-      Parameters<typeof Backend.createOpportunity>[0]['data'],
+      Parameters<typeof Backend.upsertBallot>[0]['data'],
       string
     ][] = [
       [undefined, ErrorMessage.InvalidJSON()],
       ['string data', ErrorMessage.InvalidJSON()],
       [
-        {} as NewOpportunity,
+        {} as NewOrPatchBallot,
         ErrorMessage.InvalidStringLength('contents', 0, maxContentLength, 'bytes')
       ],
       [
-        { contents: null } as unknown as NewOpportunity,
+        { contents: null } as unknown as NewOrPatchBallot,
         ErrorMessage.InvalidStringLength('contents', 0, maxContentLength, 'bytes')
       ],
       [
-        { contents: false } as unknown as NewOpportunity,
+        { contents: false } as unknown as NewOrPatchBallot,
         ErrorMessage.InvalidStringLength('contents', 0, maxContentLength, 'bytes')
       ],
       [
-        { contents: 'x'.repeat(maxContentLength + 1) } as unknown as NewOpportunity,
+        { contents: 'x'.repeat(maxContentLength + 1) } as unknown as NewOrPatchBallot,
         ErrorMessage.InvalidStringLength('contents', 0, maxContentLength, 'bytes')
       ],
       [
-        { contents: 'x'.repeat(maxContentLength) } as unknown as NewOpportunity,
+        { contents: 'x'.repeat(maxContentLength) } as unknown as NewOrPatchBallot,
         ErrorMessage.InvalidStringLength('title', 1, maxTitleLength, 'string')
       ],
       [
-        { contents: 'x', title: '' } as unknown as NewOpportunity,
+        { contents: 'x', title: '' } as unknown as NewOrPatchBallot,
         ErrorMessage.InvalidStringLength('title', 1, maxTitleLength, 'string')
       ],
       [
-        { contents: 'x', title: 5 } as unknown as NewOpportunity,
+        { contents: 'x', title: 5 } as unknown as NewOrPatchBallot,
         ErrorMessage.InvalidStringLength('title', 1, maxTitleLength, 'string')
       ],
       [
-        { contents: 'x', title: null } as unknown as NewOpportunity,
+        { contents: 'x', title: null } as unknown as NewOrPatchBallot,
         ErrorMessage.InvalidStringLength('title', 1, maxTitleLength, 'string')
       ],
       [
         {
           contents: 'x',
           title: 'x'.repeat(maxTitleLength + 1)
-        } as unknown as NewOpportunity,
+        } as unknown as NewOrPatchBallot,
         ErrorMessage.InvalidStringLength('title', 1, maxTitleLength, 'string')
       ],
       [
         {
           contents: 'x',
           title: 'x'.repeat(maxTitleLength)
-        } as unknown as NewOpportunity,
+        } as unknown as NewOrPatchBallot,
         ErrorMessage.InvalidFieldValue('creator_id')
       ],
       [
@@ -1038,7 +865,7 @@ describe('::upsertBallot', () => {
           contents: 'x',
           title: 'x'.repeat(maxTitleLength),
           creator_id: null
-        } as unknown as NewOpportunity,
+        } as unknown as NewOrPatchBallot,
         ErrorMessage.InvalidFieldValue('creator_id')
       ],
       [
@@ -1046,7 +873,7 @@ describe('::upsertBallot', () => {
           contents: 'x',
           title: 'x'.repeat(maxTitleLength),
           creator_id: 5
-        } as unknown as NewOpportunity,
+        } as unknown as NewOrPatchBallot,
         ErrorMessage.InvalidFieldValue('creator_id')
       ],
       [
@@ -1054,7 +881,7 @@ describe('::upsertBallot', () => {
           contents: 'x',
           title: 'x'.repeat(maxTitleLength),
           creator_id: 'bad'
-        } as unknown as NewOpportunity,
+        } as unknown as NewOrPatchBallot,
         ErrorMessage.InvalidObjectId('bad')
       ],
       [
@@ -1062,7 +889,7 @@ describe('::upsertBallot', () => {
           contents: 'x',
           title: 'x'.repeat(maxTitleLength),
           creator_id: fake_id
-        } as unknown as NewOpportunity,
+        } as unknown as NewOrPatchBallot,
         ErrorMessage.ItemNotFound(fake_id, 'user')
       ],
       [
@@ -1071,17 +898,17 @@ describe('::upsertBallot', () => {
           title: 'x'.repeat(maxTitleLength),
           creator_id: itemToStringId(dummyAppData.users[0]),
           type: 'administrator'
-        } as NewOpportunity,
+        } as NewOrPatchBallot,
         ErrorMessage.UnknownField('type')
       ]
     ];
 
     await expectExceptionsWithMatchingErrors(newOpportunities, (data) =>
-      Backend.createOpportunity({ apiVersion: 1, data, __provenance: 'fake-owner' })
+      Backend.upsertBallot({ apiVersion: 1, data, __provenance: 'fake-owner' })
     );
 
     await expectExceptionsWithMatchingErrors(newOpportunities, (data) =>
-      Backend.createOpportunity({ apiVersion: 2, data, __provenance: 'fake-owner' })
+      Backend.upsertBallot({ apiVersion: 2, data, __provenance: 'fake-owner' })
     );
   });
 });
@@ -1121,7 +948,7 @@ describe('::updateElection', () => {
     expect.hasAssertions();
 
     await expect(
-      Backend.createOpportunity({
+      Backend.upsertBallot({
         apiVersion: 1,
         data: {
           title: 'new opportunity',
@@ -1139,7 +966,7 @@ describe('::updateElection', () => {
     expect.hasAssertions();
 
     await expect(
-      Backend.createOpportunity({
+      Backend.upsertBallot({
         apiVersion: 1,
         data: {
           title: 'new opportunity',
@@ -1157,7 +984,7 @@ describe('::updateElection', () => {
     expect.hasAssertions();
 
     await expect(
-      Backend.createOpportunity({
+      Backend.upsertBallot({
         apiVersion: 1,
         data: {
           title: 'new opportunity',
@@ -1611,7 +1438,7 @@ describe('::deleteElection', () => {
     expect.hasAssertions();
 
     await expect(
-      Backend.createOpportunity({
+      Backend.upsertBallot({
         apiVersion: 1,
         data: {
           title: 'new opportunity',
@@ -1629,7 +1456,7 @@ describe('::deleteElection', () => {
     expect.hasAssertions();
 
     await expect(
-      Backend.createOpportunity({
+      Backend.upsertBallot({
         apiVersion: 1,
         data: {
           title: 'new opportunity',
@@ -1692,7 +1519,7 @@ describe('::deleteBallotFromElection', () => {
     expect.hasAssertions();
 
     await expect(
-      Backend.createOpportunity({
+      Backend.upsertBallot({
         apiVersion: 1,
         data: {
           title: 'new opportunity',
@@ -1710,7 +1537,7 @@ describe('::deleteBallotFromElection', () => {
     expect.hasAssertions();
 
     await expect(
-      Backend.createOpportunity({
+      Backend.upsertBallot({
         apiVersion: 1,
         data: {
           title: 'new opportunity',
