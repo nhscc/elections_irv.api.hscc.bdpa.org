@@ -269,6 +269,17 @@ export async function upsertBallot({
   /* istanbul ignore else */
   if (matchedCount === 0) {
     // ? Fall back to an insert
+    const { MAX_BALLOTS_PER_ELECTION } = getEnv();
+    const existingBallotCount = await ballotsDb.countDocuments({
+      election_id: electionId
+    });
+
+    if (existingBallotCount >= MAX_BALLOTS_PER_ELECTION) {
+      throw new ValidationError(
+        ErrorMessage.TooMany('ballots', MAX_BALLOTS_PER_ELECTION)
+      );
+    }
+
     const newBallot: InternalBallot = {
       _id: new ObjectId(),
       __provenance: provenance,
@@ -308,7 +319,6 @@ export async function updateElection({
   }
 
   validatePatchElectionData(data);
-  await validateElectionInvariants(data);
 
   const electionsDb = await getElectionsDb();
 
@@ -323,6 +333,8 @@ export async function updateElection({
   if (!(await isProvenant(electionId, provenance))) {
     throw new NotAuthorizedError();
   }
+
+  await validateElectionInvariants({ ...data, _id: electionId });
 
   const { matchedCount } = await electionsDb.updateOne(
     { _id: electionId },

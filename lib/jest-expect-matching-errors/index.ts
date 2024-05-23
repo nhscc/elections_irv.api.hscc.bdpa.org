@@ -1,5 +1,5 @@
-import { isPromise } from 'node:util/types';
 import { TrialError } from 'named-app-errors';
+import { isPromise } from 'node:util/types';
 
 import type { Promisable } from 'type-fest';
 
@@ -14,7 +14,7 @@ import type { Promisable } from 'type-fest';
  */
 export async function expectExceptionsWithMatchingErrors<
   T extends [params: unknown, errorMessage: string][]
->(spec: T, errorFn: (params: T[number][0]) => Promisable<unknown>) {
+>(spec: T, errorFn: (params: T[number][0], index: number) => Promisable<unknown>) {
   await Promise.all(
     spec.map(async ([params, message], index) => {
       let result = undefined;
@@ -22,7 +22,7 @@ export async function expectExceptionsWithMatchingErrors<
       let errored = false;
 
       try {
-        result = errorFn(params);
+        result = errorFn(params, index);
         if (isPromise(result)) {
           result = await result;
         }

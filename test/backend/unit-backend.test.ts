@@ -174,7 +174,7 @@ describe('::getAllElections', () => {
     ).rejects.toMatchObject({ message: ErrorMessage.InvalidObjectId('fake-oid') });
   });
 
-  it('rejects if after_id not found', async () => {
+  it('rejects if after_id is invalid or not found', async () => {
     expect.hasAssertions();
 
     const after_id = new ObjectId().toString();
@@ -183,6 +183,12 @@ describe('::getAllElections', () => {
       Backend.getAllElections({ after_id, provenance })
     ).rejects.toMatchObject({
       message: ErrorMessage.ItemNotFound(after_id, 'after_id')
+    });
+
+    await expect(
+      Backend.getAllElections({ after_id: 'invalid', provenance })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.InvalidObjectId('invalid')
     });
   });
 
@@ -261,7 +267,7 @@ describe('::getAllBallotsForElection', () => {
     ).resolves.toStrictEqual([]);
   });
 
-  it('rejects if election_id not found', async () => {
+  it('rejects if election_id is undefined, invalid, or not found', async () => {
     expect.hasAssertions();
 
     const election_id = new ObjectId().toString();
@@ -270,6 +276,18 @@ describe('::getAllBallotsForElection', () => {
       Backend.getAllBallotsForElection({ election_id })
     ).rejects.toMatchObject({
       message: ErrorMessage.ItemNotFound(election_id, 'election')
+    });
+
+    await expect(
+      Backend.getAllBallotsForElection({ election_id: undefined })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.ItemNotFound(undefined, 'election')
+    });
+
+    await expect(
+      Backend.getAllBallotsForElection({ election_id: 'invalid' })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.InvalidObjectId('invalid')
     });
   });
 });
@@ -302,7 +320,7 @@ describe('::getElection', () => {
     );
   });
 
-  it('rejects if election_id is not found', async () => {
+  it('rejects if election_id is undefined, invalid, or not found', async () => {
     expect.hasAssertions();
 
     const election_id = new ObjectId().toString();
@@ -311,6 +329,18 @@ describe('::getElection', () => {
       Backend.getElection({ election_id, provenance })
     ).rejects.toMatchObject({
       message: ErrorMessage.ItemNotFound(election_id, 'election')
+    });
+
+    await expect(
+      Backend.getElection({ election_id: undefined, provenance })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.ItemNotFound(undefined, 'election')
+    });
+
+    await expect(
+      Backend.getElection({ election_id: 'invalid', provenance })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.InvalidObjectId('invalid')
     });
   });
 
@@ -340,7 +370,7 @@ describe('::getBallotForElection', () => {
     ).resolves.toStrictEqual(toPublicBallot(dummyAppData.ballots[0]));
   });
 
-  it('rejects if election_id is not found', async () => {
+  it('rejects if election_id is undefined, invalid, or not found', async () => {
     expect.hasAssertions();
 
     const election_id = new ObjectId().toString();
@@ -351,9 +381,21 @@ describe('::getBallotForElection', () => {
     ).rejects.toMatchObject({
       message: ErrorMessage.ItemNotFound(election_id, 'election')
     });
+
+    await expect(
+      Backend.getBallotForElection({ election_id: undefined, voter_id })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.ItemNotFound(undefined, 'election')
+    });
+
+    await expect(
+      Backend.getBallotForElection({ election_id: 'invalid', voter_id })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.InvalidObjectId('invalid')
+    });
   });
 
-  it('rejects if voter_id is not found', async () => {
+  it('rejects if voter_id is undefined or not found', async () => {
     expect.hasAssertions();
 
     const election_id = itemToStringId(dummyAppData.elections[1]);
@@ -363,6 +405,17 @@ describe('::getBallotForElection', () => {
       Backend.getBallotForElection({ election_id, voter_id })
     ).rejects.toMatchObject({
       message: ErrorMessage.ItemNotFound(voter_id, 'ballot')
+    });
+
+    await expect(
+      Backend.getBallotForElection({ election_id, voter_id: undefined })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.InvalidStringLength(
+        'voter_id',
+        1,
+        getEnv().MAX_VOTERID_LENGTH,
+        'string'
+      )
     });
   });
 
@@ -485,7 +538,7 @@ describe('::createElection', () => {
     });
   });
 
-  it('rejects if new election would violate the invariant: opensAt < closedAt', async () => {
+  it('rejects if new election would violate the invariant: opensAt < closesAt', async () => {
     expect.hasAssertions();
 
     await expect(
@@ -519,7 +572,7 @@ describe('::createElection', () => {
     });
   });
 
-  it('rejects when attempting to create an election with duplicate options', async () => {
+  it('rejects if new election would violate the invariant: options must be unique', async () => {
     expect.hasAssertions();
 
     await expect(
@@ -580,6 +633,10 @@ describe('::createElection', () => {
       [
         { title: 'valid title', description: 'x'.repeat(maxDesc + 1) },
         ErrorMessage.InvalidStringLength('description', 0, maxDesc, 'string')
+      ],
+      [
+        { title: 'valid title', description: 'x'.repeat(maxDesc) },
+        ErrorMessage.InvalidFieldValue('options')
       ],
       [
         { title: 'valid title', description: 'x'.repeat(maxDesc), options: 1 },
@@ -690,6 +747,17 @@ describe('::createElection', () => {
           closesAt: 0
         },
         ErrorMessage.InvariantViolation('opensAt < closesAt')
+      ],
+      [
+        {
+          title: 'valid title',
+          description: 'valid description',
+          options: ['valid option'],
+          opensAt: 0,
+          closesAt: 1,
+          extra: true
+        },
+        ErrorMessage.UnknownField('extra')
       ]
     ];
 
@@ -748,26 +816,6 @@ describe('::upsertBallot', () => {
     await expect((await getBallotsDb()).countDocuments(newBallot)).resolves.toBe(0);
   });
 
-  it('rejects if ranking is empty', async () => {
-    expect.hasAssertions();
-
-    await expect(
-      Backend.upsertBallot({
-        election_id: itemToStringId(dummyAppData.elections[0]),
-        data: { ranking: {} },
-        voter_id: 'fake-id',
-        provenance
-      })
-    ).rejects.toMatchObject({
-      message: ErrorMessage.InvalidLength(
-        'ranking',
-        0,
-        1,
-        getEnv().MAX_ELECTION_OPTIONS_ITEMS
-      )
-    });
-  });
-
   it('rejects on provenance mismatch', async () => {
     expect.hasAssertions();
 
@@ -798,117 +846,190 @@ describe('::upsertBallot', () => {
     });
   });
 
+  it('rejects when attempting to add too many ballots', async () => {
+    expect.hasAssertions();
+
+    await expect(
+      Backend.upsertBallot({
+        election_id: itemToStringId(dummyAppData.elections[3]),
+        data: { ranking: { a: 1 } },
+        voter_id: 'fake-id',
+        provenance
+      })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.TooMany('ballots', getEnv().MAX_BALLOTS_PER_ELECTION)
+    });
+  });
+
+  it('rejects if election_id is undefined, invalid, or not found', async () => {
+    expect.hasAssertions();
+
+    const election_id = new ObjectId().toString();
+
+    await expect(
+      Backend.upsertBallot({
+        election_id,
+        data: { ranking: { a: 1 } },
+        voter_id: 'fake-id',
+        provenance
+      })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.ItemNotFound(election_id, 'election')
+    });
+
+    await expect(
+      Backend.upsertBallot({
+        election_id: undefined,
+        data: { ranking: { a: 1 } },
+        voter_id: 'fake-id',
+        provenance
+      })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.ItemNotFound(undefined, 'election')
+    });
+
+    await expect(
+      Backend.upsertBallot({
+        election_id: 'invalid',
+        data: { ranking: { a: 1 } },
+        voter_id: 'fake-id',
+        provenance
+      })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.InvalidObjectId('invalid')
+    });
+  });
+
+  it('rejects if voter_id is too long or too short', async () => {
+    expect.hasAssertions();
+
+    const election_id = new ObjectId().toString();
+    const { MAX_VOTERID_LENGTH } = getEnv();
+
+    await expect(
+      Backend.upsertBallot({
+        election_id,
+        data: { ranking: { a: 1 } },
+        voter_id: 'x'.repeat(MAX_VOTERID_LENGTH + 1),
+        provenance
+      })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.InvalidStringLength(
+        'voter_id',
+        1,
+        MAX_VOTERID_LENGTH,
+        'string'
+      )
+    });
+
+    await expect(
+      Backend.upsertBallot({
+        election_id,
+        data: { ranking: { a: 1 } },
+        voter_id: '',
+        provenance
+      })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.InvalidStringLength(
+        'voter_id',
+        1,
+        MAX_VOTERID_LENGTH,
+        'string'
+      )
+    });
+  });
+
   it('rejects if data is invalid or contains properties that violate limits', async () => {
     expect.hasAssertions();
 
-    const fake_id = itemToStringId(new ObjectId());
-
     const {
-      MAX_OPPORTUNITY_CONTENTS_LENGTH_BYTES: maxContentLength,
-      MAX_OPPORTUNITY_TITLE_LENGTH: maxTitleLength
+      MAX_ELECTION_OPTIONS_ITEMS: maxOptions,
+      MAX_ELECTION_OPTION_LENGTH: maxOption
     } = getEnv();
+    const election_id = itemToStringId(dummyAppData.elections[0]);
 
-    const newOpportunities: [
-      Parameters<typeof Backend.upsertBallot>[0]['data'],
-      string
-    ][] = [
+    const newOrPatchBallots: [LiteralUnknownUnion<NewOrPatchBallot>, string][] = [
       [undefined, ErrorMessage.InvalidJSON()],
       ['string data', ErrorMessage.InvalidJSON()],
-      [
-        {} as NewOrPatchBallot,
-        ErrorMessage.InvalidStringLength('contents', 0, maxContentLength, 'bytes')
-      ],
-      [
-        { contents: null } as unknown as NewOrPatchBallot,
-        ErrorMessage.InvalidStringLength('contents', 0, maxContentLength, 'bytes')
-      ],
-      [
-        { contents: false } as unknown as NewOrPatchBallot,
-        ErrorMessage.InvalidStringLength('contents', 0, maxContentLength, 'bytes')
-      ],
-      [
-        { contents: 'x'.repeat(maxContentLength + 1) } as unknown as NewOrPatchBallot,
-        ErrorMessage.InvalidStringLength('contents', 0, maxContentLength, 'bytes')
-      ],
-      [
-        { contents: 'x'.repeat(maxContentLength) } as unknown as NewOrPatchBallot,
-        ErrorMessage.InvalidStringLength('title', 1, maxTitleLength, 'string')
-      ],
-      [
-        { contents: 'x', title: '' } as unknown as NewOrPatchBallot,
-        ErrorMessage.InvalidStringLength('title', 1, maxTitleLength, 'string')
-      ],
-      [
-        { contents: 'x', title: 5 } as unknown as NewOrPatchBallot,
-        ErrorMessage.InvalidStringLength('title', 1, maxTitleLength, 'string')
-      ],
-      [
-        { contents: 'x', title: null } as unknown as NewOrPatchBallot,
-        ErrorMessage.InvalidStringLength('title', 1, maxTitleLength, 'string')
-      ],
+      [{}, ErrorMessage.EmptyJSONBody()],
+      [{ contents: null }, ErrorMessage.InvalidJSON('ranking')],
+      [{ ranking: 1 }, ErrorMessage.InvalidJSON('ranking')],
+      [{ ranking: {} }, ErrorMessage.InvalidLength('ranking', 0, 1, maxOptions)],
       [
         {
-          contents: 'x',
-          title: 'x'.repeat(maxTitleLength + 1)
-        } as unknown as NewOrPatchBallot,
-        ErrorMessage.InvalidStringLength('title', 1, maxTitleLength, 'string')
+          ranking: Object.fromEntries(
+            [...dummyAppData.elections[3].options, 'plus one'].map((option) => [
+              option,
+              1
+            ])
+          )
+        },
+        ErrorMessage.InvalidLength('ranking', maxOptions + 1, 1, maxOptions)
       ],
       [
-        {
-          contents: 'x',
-          title: 'x'.repeat(maxTitleLength)
-        } as unknown as NewOrPatchBallot,
-        ErrorMessage.InvalidFieldValue('creator_id')
+        { ranking: { ['x'.repeat(maxOption + 1)]: 1 } },
+        ErrorMessage.InvalidObjectKey('ranking', 'x'.repeat(maxOption + 1), [
+          `strings between 1 and ${maxOption} characters`
+        ])
       ],
       [
-        {
-          contents: 'x',
-          title: 'x'.repeat(maxTitleLength),
-          creator_id: null
-        } as unknown as NewOrPatchBallot,
-        ErrorMessage.InvalidFieldValue('creator_id')
+        { ranking: { '': 1 } },
+        ErrorMessage.InvalidObjectKey('ranking', '', [
+          `strings between 1 and ${maxOption} characters`
+        ])
       ],
       [
-        {
-          contents: 'x',
-          title: 'x'.repeat(maxTitleLength),
-          creator_id: 5
-        } as unknown as NewOrPatchBallot,
-        ErrorMessage.InvalidFieldValue('creator_id')
+        { ranking: { x: '1' } },
+        ErrorMessage.InvalidObjectKeyValue('ranking', '1', [
+          `safe non-negative integers`
+        ])
       ],
       [
-        {
-          contents: 'x',
-          title: 'x'.repeat(maxTitleLength),
-          creator_id: 'bad'
-        } as unknown as NewOrPatchBallot,
-        ErrorMessage.InvalidObjectId('bad')
+        { ranking: { x: 1.5 } },
+        ErrorMessage.InvalidObjectKeyValue('ranking', 1.5, [
+          `safe non-negative integers`
+        ])
       ],
       [
-        {
-          contents: 'x',
-          title: 'x'.repeat(maxTitleLength),
-          creator_id: fake_id
-        } as unknown as NewOrPatchBallot,
-        ErrorMessage.ItemNotFound(fake_id, 'user')
+        { ranking: { x: undefined } },
+        ErrorMessage.InvalidObjectKeyValue('ranking', undefined, [
+          `safe non-negative integers`
+        ])
       ],
       [
-        {
-          contents: 'x',
-          title: 'x'.repeat(maxTitleLength),
-          creator_id: itemToStringId(dummyAppData.users[0]),
-          type: 'administrator'
-        } as NewOrPatchBallot,
-        ErrorMessage.UnknownField('type')
-      ]
+        { ranking: { x: -1 } },
+        ErrorMessage.InvalidObjectKeyValue('ranking', -1, [
+          `safe non-negative integers`
+        ])
+      ],
+      [
+        { ranking: { x: Number.NaN } },
+        ErrorMessage.InvalidObjectKeyValue('ranking', Number.NaN, [
+          `safe non-negative integers`
+        ])
+      ],
+      [
+        { ranking: { x: Number.POSITIVE_INFINITY } },
+        ErrorMessage.InvalidObjectKeyValue('ranking', Number.POSITIVE_INFINITY, [
+          `safe non-negative integers`
+        ])
+      ],
+      [
+        { ranking: { x: Number.NEGATIVE_INFINITY } },
+        ErrorMessage.InvalidObjectKeyValue('ranking', Number.NEGATIVE_INFINITY, [
+          `safe non-negative integers`
+        ])
+      ],
+      [{ ranking: { x: 1 }, extra: true }, ErrorMessage.UnknownField('extra')]
     ];
 
-    await expectExceptionsWithMatchingErrors(newOpportunities, (data) =>
-      Backend.upsertBallot({ apiVersion: 1, data, __provenance: 'fake-owner' })
-    );
-
-    await expectExceptionsWithMatchingErrors(newOpportunities, (data) =>
-      Backend.upsertBallot({ apiVersion: 2, data, __provenance: 'fake-owner' })
+    await expectExceptionsWithMatchingErrors(newOrPatchBallots, (data, index) =>
+      Backend.upsertBallot({
+        election_id,
+        voter_id: index.toString(),
+        data,
+        provenance: 'fake-owner'
+      })
     );
   });
 });
@@ -917,30 +1038,56 @@ describe('::updateElection', () => {
   it('updates an existing election', async () => {
     expect.hasAssertions();
 
-    const usersDb = await getUsersDb();
-    const userId = itemToObjectId(dummyAppData.users[2]);
-    const patchUser: PatchUser = { type: 'staff' };
+    const electionsDb = await getElectionsDb();
+    const electionId = itemToObjectId(dummyAppData.elections[2]);
+    const election_id = itemToStringId(dummyAppData.elections[2]);
+
+    const patchElection: PatchElection = {
+      title: 'title',
+      description: 'description',
+      options: ['option-1', 'option-2'],
+      opensAt: 0,
+      closesAt: 1
+    };
 
     await expect(
-      usersDb.countDocuments({
-        _id: userId,
-        ...patchUser
-      })
+      electionsDb.countDocuments({ _id: electionId, ...patchElection })
     ).resolves.toBe(0);
 
     await expect(
-      Backend.updateUser({
-        apiVersion: 1,
-        user_id: itemToStringId(userId),
-        data: patchUser
-      })
+      Backend.updateElection({ election_id, data: patchElection, provenance })
     ).resolves.toBeUndefined();
 
     await expect(
-      usersDb.countDocuments({
-        _id: userId,
-        ...patchUser
-      })
+      electionsDb.countDocuments({ _id: electionId, ...patchElection })
+    ).resolves.toBe(1);
+  });
+
+  it('supports updating election to empty description and options', async () => {
+    expect.hasAssertions();
+
+    const electionsDb = await getElectionsDb();
+    const electionId = itemToObjectId(dummyAppData.elections[2]);
+    const election_id = itemToStringId(dummyAppData.elections[2]);
+
+    const patchElection: PatchElection = {
+      title: '1234',
+      description: '',
+      options: [],
+      opensAt: 0,
+      closesAt: 1
+    };
+
+    await expect(
+      electionsDb.countDocuments({ _id: electionId, ...patchElection })
+    ).resolves.toBe(0);
+
+    await expect(
+      Backend.updateElection({ election_id, data: patchElection, provenance })
+    ).resolves.toBeUndefined();
+
+    await expect(
+      electionsDb.countDocuments({ _id: electionId, ...patchElection })
     ).resolves.toBe(1);
   });
 
@@ -948,17 +1095,13 @@ describe('::updateElection', () => {
     expect.hasAssertions();
 
     await expect(
-      Backend.upsertBallot({
-        apiVersion: 1,
-        data: {
-          title: 'new opportunity',
-          contents: '',
-          creator_id: itemToStringId(dummyAppData.users[0])
-        },
-        __provenance: undefined as unknown as string
+      Backend.updateElection({
+        provenance: 'fake',
+        election_id: itemToStringId(dummyAppData.elections[0]),
+        data: { title: 'updated election' }
       })
     ).rejects.toMatchObject({
-      message: ErrorMessage.BadProvenanceToken()
+      message: ErrorMessage.NotAuthorized()
     });
   });
 
@@ -966,35 +1109,64 @@ describe('::updateElection', () => {
     expect.hasAssertions();
 
     await expect(
-      Backend.upsertBallot({
-        apiVersion: 1,
-        data: {
-          title: 'new opportunity',
-          contents: '',
-          creator_id: itemToStringId(dummyAppData.users[0])
-        },
-        __provenance: undefined as unknown as string
+      Backend.updateElection({
+        provenance: undefined as unknown as string,
+        election_id: itemToStringId(dummyAppData.elections[0]),
+        data: { title: 'updated election' }
       })
     ).rejects.toMatchObject({
       message: ErrorMessage.BadProvenanceToken()
     });
   });
 
-  it('rejects if update would violate the invariant: opensAt < closedAt', async () => {
+  it('rejects if update would violate the invariant: opensAt < closesAt', async () => {
     expect.hasAssertions();
 
     await expect(
-      Backend.upsertBallot({
-        apiVersion: 1,
+      Backend.updateElection({
+        election_id: itemToStringId(dummyAppData.elections[2]),
         data: {
-          title: 'new opportunity',
-          contents: '',
-          creator_id: itemToStringId(dummyAppData.users[0])
+          opensAt: 1,
+          closesAt: 1
         },
-        __provenance: undefined as unknown as string
+        provenance
       })
     ).rejects.toMatchObject({
-      message: ErrorMessage.BadProvenanceToken()
+      message: ErrorMessage.InvariantViolation('opensAt < closesAt')
+    });
+
+    await expect(
+      Backend.updateElection({
+        election_id: itemToStringId(dummyAppData.elections[0]),
+        data: { opensAt: dummyAppData.elections[0].closesAt },
+        provenance
+      })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.InvariantViolation('opensAt < closesAt')
+    });
+
+    await expect(
+      Backend.updateElection({
+        election_id: itemToStringId(dummyAppData.elections[1]),
+        data: { closesAt: dummyAppData.elections[1].opensAt },
+        provenance
+      })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.InvariantViolation('opensAt < closesAt')
+    });
+  });
+
+  it('rejects if new election would violate the invariant: options must be unique', async () => {
+    expect.hasAssertions();
+
+    await expect(
+      Backend.updateElection({
+        election_id: itemToStringId(dummyAppData.elections[1]),
+        data: { options: ['bad', 'bad'] },
+        provenance
+      })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.InvariantViolation('options must be unique')
     });
   });
 
@@ -1002,10 +1174,10 @@ describe('::updateElection', () => {
     expect.hasAssertions();
 
     await expect(
-      Backend.updateUser({
-        apiVersion: 1,
-        user_id: itemToStringId(dummyAppData.users[0]),
-        data: {}
+      Backend.updateElection({
+        election_id: itemToStringId(dummyAppData.elections[1]),
+        data: {},
+        provenance
       })
     ).rejects.toMatchObject({
       message: ErrorMessage.EmptyJSONBody()
@@ -1015,403 +1187,132 @@ describe('::updateElection', () => {
   it('rejects if the election_id is undefined, invalid, or not found', async () => {
     expect.hasAssertions();
 
+    const election_id = new ObjectId().toString();
+
     await expect(
-      Backend.updateUser({
-        apiVersion: 1,
-        user_id: undefined,
-        data: { email: 'fake@email.com' }
+      Backend.updateElection({
+        election_id,
+        data: { title: 'updated' },
+        provenance
       })
     ).rejects.toMatchObject({
-      message: ErrorMessage.InvalidItem('user_id', 'parameter')
+      message: ErrorMessage.ItemNotFound(election_id, 'election')
     });
 
     await expect(
-      Backend.updateUser({
-        apiVersion: 1,
-        user_id: 'bad',
-        data: { email: 'fake@email.com' }
+      Backend.updateElection({
+        election_id: undefined,
+        data: { title: 'updated' },
+        provenance
       })
     ).rejects.toMatchObject({
-      message: ErrorMessage.InvalidObjectId('bad')
+      message: ErrorMessage.ItemNotFound(undefined, 'election')
     });
 
-    const user_id = itemToStringId(new ObjectId());
-
     await expect(
-      Backend.updateUser({
-        apiVersion: 1,
-        user_id,
-        data: { email: 'fake@email.com' }
+      Backend.updateElection({
+        election_id: 'invalid',
+        data: { title: 'updated' },
+        provenance
       })
     ).rejects.toMatchObject({
-      message: ErrorMessage.ItemNotFound(user_id, 'user')
+      message: ErrorMessage.InvalidObjectId('invalid')
     });
-  });
-
-  it('rejects when attempting to update an election to have duplicate options', async () => {
-    expect.hasAssertions();
-
-    await expect(
-      Backend.updateUser({
-        apiVersion: 1,
-        user_id: itemToStringId(dummyAppData.users[1]),
-        data: { email: dummyAppData.users[0].email }
-      })
-    ).rejects.toMatchObject({ message: ErrorMessage.DuplicateFieldValue('email') });
-
-    await expect(
-      Backend.updateUser({
-        apiVersion: 1,
-        user_id: itemToStringId(dummyAppData.users[1]),
-        data: { email: dummyAppData.users[1].email }
-      })
-    ).resolves.toBeUndefined();
   });
 
   it('rejects if data is invalid or contains properties that violate limits', async () => {
     expect.hasAssertions();
 
     const {
-      MIN_USER_EMAIL_LENGTH: minELength,
-      MAX_USER_EMAIL_LENGTH: maxELength,
-      USER_SALT_LENGTH: saltLength,
-      USER_KEY_LENGTH: keyLength,
-      MAX_SECTION_DESCRIPTION_LENGTH: maxDescLength,
-      MAX_SECTION_LOCATION_LENGTH: maxLocationLength,
-      MAX_SECTION_TITLE_LENGTH: maxTitleLength,
-      MAX_USER_SECTION_ITEMS: maxSectionItems,
-      MAX_USER_ABOUT_SECTION_LENGTH_BYTES: maxAboutLength,
-      MAX_USER_SKILLS_SECTION_ITEMS: maxSkills,
-      MAX_USER_SKILLS_SECTION_ITEM_LENGTH: maxSkillLength
+      MIN_ELECTION_TITLE_LENGTH: minTitle,
+      MAX_ELECTION_TITLE_LENGTH: maxTitle,
+      MAX_ELECTION_DESC_LENGTH: maxDesc,
+      MAX_ELECTION_OPTIONS_ITEMS: maxOptions,
+      MAX_ELECTION_OPTION_LENGTH: maxOption
     } = getEnv();
 
-    const patchUsers: [Parameters<typeof Backend.updateUser>[0]['data'], string][] = [
-      [undefined as unknown as PatchUser, ErrorMessage.InvalidJSON()],
-      ['string data' as PatchUser, ErrorMessage.InvalidJSON()],
+    const patchElections: [LiteralUnknownUnion<PatchElection>, string][] = [
+      [undefined, ErrorMessage.InvalidJSON()],
+      ['string data', ErrorMessage.InvalidJSON()],
+      [{}, ErrorMessage.EmptyJSONBody()],
+      [{ email: null }, ErrorMessage.UnknownField('email')],
       [
-        { email: '' },
-        ErrorMessage.InvalidStringLength(
-          'email',
-          minELength,
-          maxELength,
-          'valid email address'
-        )
+        { title: 1 },
+        ErrorMessage.InvalidStringLength('title', minTitle, maxTitle, 'string')
       ],
       [
-        { email: 'x'.repeat(minELength - 1) },
-        ErrorMessage.InvalidStringLength(
-          'email',
-          minELength,
-          maxELength,
-          'valid email address'
-        )
+        { title: 'x'.repeat(minTitle - 1) },
+        ErrorMessage.InvalidStringLength('title', minTitle, maxTitle, 'string')
       ],
       [
-        { email: 'x'.repeat(maxELength + 1) },
-        ErrorMessage.InvalidStringLength(
-          'email',
-          minELength,
-          maxELength,
-          'valid email address'
-        )
+        { title: 'x'.repeat(maxTitle + 1) },
+        ErrorMessage.InvalidStringLength('title', minTitle, maxTitle, 'string')
       ],
       [
-        { email: 'x'.repeat(maxELength) },
-        ErrorMessage.InvalidStringLength(
-          'email',
-          minELength,
-          maxELength,
-          'valid email address'
-        )
+        { description: 1 },
+        ErrorMessage.InvalidStringLength('description', 0, maxDesc, 'string')
       ],
       [
-        { salt: '' },
-        ErrorMessage.InvalidStringLength('salt', saltLength, null, 'hexadecimal')
+        { description: 'x'.repeat(maxDesc + 1) },
+        ErrorMessage.InvalidStringLength('description', 0, maxDesc, 'string')
+      ],
+      [{ options: 1 }, ErrorMessage.InvalidFieldValue('options')],
+      [
+        { description: '', options: [''] },
+        ErrorMessage.InvalidArrayValue('options', '', 0, [
+          `strings of length between 1 and ${maxOption}`
+        ])
       ],
       [
-        { salt: '0'.repeat(saltLength - 1) },
-        ErrorMessage.InvalidStringLength('salt', saltLength, null, 'hexadecimal')
+        { options: ['x'.repeat(maxOption + 1)] },
+        ErrorMessage.InvalidArrayValue('options', 'x'.repeat(maxOption + 1), 0, [
+          `strings of length between 1 and ${maxOption}`
+        ])
       ],
       [
-        { salt: 'x'.repeat(saltLength) },
-        ErrorMessage.InvalidStringLength('salt', saltLength, null, 'hexadecimal')
-      ],
-      [
-        { key: '' },
-        ErrorMessage.InvalidStringLength('key', keyLength, null, 'hexadecimal')
-      ],
-      [
-        { key: '0'.repeat(keyLength - 1) },
-        ErrorMessage.InvalidStringLength('key', keyLength, null, 'hexadecimal')
-      ],
-      [
-        // * Not hexadecimal
-        { key: 'x'.repeat(keyLength) },
-        ErrorMessage.InvalidStringLength('key', keyLength, null, 'hexadecimal')
-      ],
-      // * Key must always be paired with salt and vice-versa
-      [
-        { key: 'a'.repeat(keyLength) },
-        ErrorMessage.InvalidStringLength('salt', saltLength, null, 'hexadecimal')
-      ],
-      // * Key must always be paired with salt and vice-versa
-      [
-        { salt: 'a'.repeat(saltLength) },
-        ErrorMessage.InvalidStringLength('key', keyLength, null, 'hexadecimal')
-      ],
-      [
-        { views: null },
-        ErrorMessage.InvalidFieldValue('views', 'null', ['increment'])
-      ],
-      [{ views: 5 }, ErrorMessage.InvalidFieldValue('views', '5', ['increment'])],
-      [{ views: '+1' }, ErrorMessage.InvalidFieldValue('views', '+1', ['increment'])],
-      [
-        { views: 'decrement' },
-        ErrorMessage.InvalidFieldValue('views', 'decrement', ['increment'])
-      ],
-      [
-        { type: 'blogger' },
-        ErrorMessage.InvalidFieldValue('type', 'blogger', userTypes)
-      ],
-      [{ type: null }, ErrorMessage.InvalidFieldValue('type', 'null', userTypes)],
-      [{ sections: null }, ErrorMessage.InvalidFieldValue('sections')],
-      [{ sections: [] }, ErrorMessage.InvalidFieldValue('sections')],
-      [
-        { sections: { about: true } },
-        ErrorMessage.InvalidStringLength('sections.about', 0, maxAboutLength, 'bytes')
-      ],
-      [
-        { sections: { about: 5 } },
-        ErrorMessage.InvalidStringLength('sections.about', 0, maxAboutLength, 'bytes')
+        { options: ['valid option', ''] },
+        ErrorMessage.InvalidArrayValue('options', '', 1, [
+          `strings of length between 1 and ${maxOption}`
+        ])
       ],
       [
         {
-          sections: {
-            about: 'something',
-            education: [
-              {
-                title: 'e'.repeat(maxTitleLength + 1),
-                description: 'e'.repeat(maxDescLength),
-                location: 'e'.repeat(maxLocationLength),
-                startedAt: mockDateNowMs,
-                endedAt: null
-              }
-            ]
-          }
+          options: ('x'.repeat(maxOption) + ',')
+            .repeat(maxOptions + 1)
+            .split(',')
+            .slice(0, -1)
         },
-        ErrorMessage.InvalidStringLength(
-          'sections.education[0].title',
-          1,
-          maxTitleLength,
-          'string'
-        )
+        ErrorMessage.TooMany('options', maxOptions)
       ],
       [
-        {
-          sections: {
-            about: 'something',
-            education: [
-              {
-                title: 'e'.repeat(maxTitleLength),
-                description: 'e'.repeat(maxDescLength + 1),
-                location: 'e'.repeat(maxLocationLength),
-                startedAt: mockDateNowMs,
-                endedAt: null
-              }
-            ]
-          }
-        },
-        ErrorMessage.InvalidStringLength(
-          'sections.education[0].description',
-          1,
-          maxDescLength,
-          'string'
-        )
+        { opensAt: '1' },
+        ErrorMessage.InvalidNumberValue('opensAt', 0, null, ' non-negative integer')
       ],
       [
-        {
-          sections: {
-            about: 'something',
-            education: [
-              {
-                title: 'e'.repeat(maxTitleLength),
-                description: 'e'.repeat(maxDescLength),
-                location: 'e'.repeat(maxLocationLength + 1),
-                startedAt: mockDateNowMs,
-                endedAt: null
-              }
-            ]
-          }
-        },
-        ErrorMessage.InvalidStringLength(
-          'sections.education[0].location',
-          1,
-          maxLocationLength,
-          'string'
-        )
+        { opensAt: -1 },
+        ErrorMessage.InvalidNumberValue('opensAt', 0, null, ' non-negative integer')
       ],
       [
-        {
-          sections: {
-            about: 'something',
-            education: [
-              {
-                title: 'e'.repeat(maxTitleLength),
-                description: 'e'.repeat(maxDescLength),
-                location: 'e'.repeat(maxLocationLength),
-                startedAt: null,
-                endedAt: mockDateNowMs
-              }
-            ]
-          }
-        },
-        ErrorMessage.InvalidNumberValue(
-          'sections.education[0].startedAt',
-          1,
-          Number.MAX_SAFE_INTEGER,
-          'integer'
-        )
+        { closesAt: '1' },
+        ErrorMessage.InvalidNumberValue('closesAt', 0, null, ' non-negative integer')
       ],
       [
-        {
-          sections: {
-            about: 'something',
-            education: [
-              {
-                title: 'e'.repeat(maxTitleLength),
-                description: 'e'.repeat(maxDescLength),
-                location: 'e'.repeat(maxLocationLength),
-                startedAt: -1,
-                endedAt: -1
-              }
-            ]
-          }
-        },
-        ErrorMessage.InvalidNumberValue(
-          'sections.education[0].startedAt',
-          1,
-          Number.MAX_SAFE_INTEGER,
-          'integer'
-        )
+        { closesAt: -1 },
+        ErrorMessage.InvalidNumberValue('closesAt', 0, null, ' non-negative integer')
       ],
       [
-        {
-          sections: {
-            about: 'something',
-            education: [
-              {
-                title: 'e'.repeat(maxTitleLength),
-                description: 'e'.repeat(maxDescLength),
-                location: 'e'.repeat(maxLocationLength),
-                startedAt: mockDateNowMs,
-                endedAt: -1
-              }
-            ]
-          }
-        },
-        ErrorMessage.InvalidNumberValue(
-          'sections.education[0].endedAt',
-          mockDateNowMs,
-          Number.MAX_SAFE_INTEGER,
-          'integer',
-          true
-        )
-      ],
-      [
-        {
-          sections: {
-            about: 'something',
-            education: [
-              {
-                title: 'e'.repeat(maxTitleLength),
-                description: 'e'.repeat(maxDescLength),
-                location: 'e'.repeat(maxLocationLength),
-                startedAt: mockDateNowMs,
-                endedAt: mockDateNowMs - 1
-              }
-            ]
-          }
-        },
-        ErrorMessage.InvalidNumberValue(
-          'sections.education[0].endedAt',
-          mockDateNowMs,
-          Number.MAX_SAFE_INTEGER,
-          'integer',
-          true
-        )
-      ],
-      [
-        {
-          sections: {
-            about: 'something',
-            education: Array.from({ length: maxSectionItems + 1 }).map((_, index) => {
-              return {
-                title: `${index}`,
-                description: `${index}`,
-                location: `${index}`,
-                startedAt: mockDateNowMs,
-                endedAt: mockDateNowMs
-              };
-            })
-          }
-        },
-        ErrorMessage.TooMany(`sections.education items`, maxSectionItems)
-      ],
-      [
-        {
-          sections: {
-            about: 'something',
-            skills: Array.from({ length: maxSkills + 1 }).map((_, index) =>
-              `${index}`.repeat(maxSkillLength)
-            )
-          }
-        },
-        ErrorMessage.TooMany('skills', maxSkills)
-      ],
-      [
-        {
-          sections: { about: 'something', skills: ['x'.repeat(maxSkillLength + 1)] }
-        },
-        ErrorMessage.InvalidArrayValue(
-          'sections.skills',
-          'x'.repeat(maxSkillLength + 1),
-          0
-        )
-      ],
-      [{ banned: 'true' as unknown as boolean }, ErrorMessage.UnknownField('banned')],
-      [{ banned: null as unknown as boolean }, ErrorMessage.UnknownField('banned')],
-      [{ data: 1 } as PatchUser, ErrorMessage.UnknownField('data')],
-      [
-        { blogName: 'new-blog-name' } as PatchUser,
-        ErrorMessage.UnknownField('blogName')
-      ],
-      [{ name: 'username' } as PatchUser, ErrorMessage.UnknownField('name')],
-      [
-        {
-          email: 'valid@email.address',
-          salt: '0'.repeat(saltLength),
-          key: '0'.repeat(keyLength),
-          username: 'new-username'
-        } as PatchUser,
-        ErrorMessage.UnknownField('username')
+        { opensAt: 0, closesAt: 0 },
+        ErrorMessage.InvariantViolation('opensAt < closesAt')
       ]
     ];
 
-    await expectExceptionsWithMatchingErrors(patchUsers, (data) => {
-      return Backend.updateUser({
-        apiVersion: 1,
-        user_id: dummyAppData.users[0].username,
-        data
-      });
-    });
-
-    await expectExceptionsWithMatchingErrors(patchUsers, (data) => {
-      return Backend.updateUser({
-        apiVersion: 2,
-        user_id: dummyAppData.users[0].username,
-        data
-      });
-    });
+    await expectExceptionsWithMatchingErrors(patchElections, (data) =>
+      Backend.updateElection({
+        election_id: itemToStringId(dummyAppData.elections[0]),
+        data,
+        provenance
+      })
+    );
   });
 });
 
@@ -1419,10 +1320,10 @@ describe('::deleteElection', () => {
   it('soft deletes an election', async () => {
     expect.hasAssertions();
 
-    const usersDb = await getUsersDb();
+    const electionsDb = await getElectionsDb();
 
     await expect(
-      usersDb.countDocuments({ _id: itemToObjectId(dummyAppData.users[0]) })
+      electionsDb.countDocuments({ _id: itemToObjectId(dummyAppData.users[0]) })
     ).resolves.toBe(1);
 
     await expect(
@@ -1430,7 +1331,7 @@ describe('::deleteElection', () => {
     ).resolves.toBeUndefined();
 
     await expect(
-      usersDb.countDocuments({ _id: itemToObjectId(dummyAppData.users[0]) })
+      electionsDb.countDocuments({ _id: itemToObjectId(dummyAppData.users[0]) })
     ).resolves.toBe(0);
   });
 
@@ -1438,14 +1339,13 @@ describe('::deleteElection', () => {
     expect.hasAssertions();
 
     await expect(
-      Backend.upsertBallot({
-        apiVersion: 1,
+      Backend.deleteElection({
+        provenance: undefined as unknown as string,
         data: {
-          title: 'new opportunity',
+          title: 'updated election',
           contents: '',
           creator_id: itemToStringId(dummyAppData.users[0])
-        },
-        __provenance: undefined as unknown as string
+        }
       })
     ).rejects.toMatchObject({
       message: ErrorMessage.BadProvenanceToken()
@@ -1457,13 +1357,12 @@ describe('::deleteElection', () => {
 
     await expect(
       Backend.upsertBallot({
-        apiVersion: 1,
+        provenance: undefined as unknown as string,
         data: {
-          title: 'new opportunity',
+          title: 'updated election',
           contents: '',
           creator_id: itemToStringId(dummyAppData.users[0])
-        },
-        __provenance: undefined as unknown as string
+        }
       })
     ).rejects.toMatchObject({
       message: ErrorMessage.BadProvenanceToken()
@@ -1519,14 +1418,13 @@ describe('::deleteBallotFromElection', () => {
     expect.hasAssertions();
 
     await expect(
-      Backend.upsertBallot({
-        apiVersion: 1,
+      Backend.deleteBallotFromElection({
+        provenance: undefined as unknown as string,
         data: {
-          title: 'new opportunity',
+          title: 'updated election',
           contents: '',
           creator_id: itemToStringId(dummyAppData.users[0])
-        },
-        __provenance: undefined as unknown as string
+        }
       })
     ).rejects.toMatchObject({
       message: ErrorMessage.BadProvenanceToken()
@@ -1538,13 +1436,12 @@ describe('::deleteBallotFromElection', () => {
 
     await expect(
       Backend.upsertBallot({
-        apiVersion: 1,
+        provenance: undefined as unknown as string,
         data: {
-          title: 'new opportunity',
+          title: 'updated election',
           contents: '',
           creator_id: itemToStringId(dummyAppData.users[0])
-        },
-        __provenance: undefined as unknown as string
+        }
       })
     ).rejects.toMatchObject({
       message: ErrorMessage.BadProvenanceToken()
