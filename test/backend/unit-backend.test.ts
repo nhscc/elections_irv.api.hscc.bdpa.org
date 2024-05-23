@@ -1321,18 +1321,19 @@ describe('::deleteElection', () => {
     expect.hasAssertions();
 
     const electionsDb = await getElectionsDb();
+    const electionId = itemToObjectId(dummyAppData.elections[0]);
 
     await expect(
-      electionsDb.countDocuments({ _id: itemToObjectId(dummyAppData.users[0]) })
-    ).resolves.toBe(1);
+      electionsDb.countDocuments({ _id: electionId, deleted: true })
+    ).resolves.toBe(0);
 
     await expect(
-      Backend.deleteUser({ user_id: itemToStringId(dummyAppData.users[0]) })
+      Backend.deleteElection({ election_id: electionId.toString(), provenance })
     ).resolves.toBeUndefined();
 
     await expect(
-      electionsDb.countDocuments({ _id: itemToObjectId(dummyAppData.users[0]) })
-    ).resolves.toBe(0);
+      electionsDb.countDocuments({ _id: electionId, deleted: true })
+    ).resolves.toBe(1);
   });
 
   it('rejects on provenance mismatch', async () => {
@@ -1340,76 +1341,70 @@ describe('::deleteElection', () => {
 
     await expect(
       Backend.deleteElection({
-        provenance: undefined as unknown as string,
-        data: {
-          title: 'updated election',
-          contents: '',
-          creator_id: itemToStringId(dummyAppData.users[0])
-        }
+        election_id: itemToStringId(dummyAppData.elections[0]),
+        provenance: 'fake'
       })
-    ).rejects.toMatchObject({
-      message: ErrorMessage.BadProvenanceToken()
-    });
+    ).rejects.toMatchObject({ message: ErrorMessage.NotAuthorized() });
   });
 
   it('rejects if provenance is not a string', async () => {
     expect.hasAssertions();
 
     await expect(
-      Backend.upsertBallot({
-        provenance: undefined as unknown as string,
-        data: {
-          title: 'updated election',
-          contents: '',
-          creator_id: itemToStringId(dummyAppData.users[0])
-        }
+      Backend.deleteElection({
+        election_id: itemToStringId(dummyAppData.elections[0]),
+        provenance: undefined as unknown as string
       })
-    ).rejects.toMatchObject({
-      message: ErrorMessage.BadProvenanceToken()
-    });
+    ).rejects.toMatchObject({ message: ErrorMessage.BadProvenanceToken() });
   });
 
   it('rejects if the election_id is undefined, invalid, or not found', async () => {
     expect.hasAssertions();
 
     await expect(
-      Backend.deleteUser({ user_id: 'does-not-exist' })
+      Backend.deleteElection({ election_id: 'invalid', provenance })
     ).rejects.toMatchObject({
-      message: ErrorMessage.InvalidObjectId('does-not-exist')
+      message: ErrorMessage.InvalidObjectId('invalid')
     });
 
-    await expect(Backend.deleteUser({ user_id: undefined })).rejects.toMatchObject({
-      message: ErrorMessage.InvalidItem('user_id', 'parameter')
+    await expect(
+      Backend.deleteElection({ election_id: undefined, provenance })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.ItemNotFound(undefined, 'election')
     });
 
-    const user_id = itemToStringId(new ObjectId());
-    await expect(Backend.deleteUser({ user_id })).rejects.toMatchObject({
-      message: ErrorMessage.ItemNotFound(user_id, 'user')
+    const election_id = itemToStringId(new ObjectId());
+    await expect(
+      Backend.deleteElection({ election_id, provenance })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.ItemNotFound(election_id, 'election')
     });
   });
 });
 
 describe('::deleteBallotFromElection', () => {
-  it('deletes an article by article_id', async () => {
+  it('deletes a ballot', async () => {
     expect.hasAssertions();
 
-    const articlesDb = await getArticlesDb();
+    const ballotsDb = await getBallotsDb();
 
     await expect(
-      articlesDb.countDocuments({
-        _id: itemToObjectId(dummyAppData.articles[0])
+      ballotsDb.countDocuments({
+        _id: itemToObjectId(dummyAppData.ballots[0])
       })
     ).resolves.toBe(1);
 
     await expect(
-      Backend.deleteArticle({
-        article_id: itemToStringId(dummyAppData.articles[0])
+      Backend.deleteBallotFromElection({
+        provenance,
+        election_id: itemToStringId(dummyAppData.ballots[0].election_id),
+        voter_id: dummyAppData.ballots[0].voter_id
       })
     ).resolves.toBeUndefined();
 
     await expect(
-      articlesDb.countDocuments({
-        _id: itemToObjectId(dummyAppData.articles[0])
+      ballotsDb.countDocuments({
+        _id: itemToObjectId(dummyAppData.ballots[0])
       })
     ).resolves.toBe(0);
   });
@@ -1419,15 +1414,12 @@ describe('::deleteBallotFromElection', () => {
 
     await expect(
       Backend.deleteBallotFromElection({
-        provenance: undefined as unknown as string,
-        data: {
-          title: 'updated election',
-          contents: '',
-          creator_id: itemToStringId(dummyAppData.users[0])
-        }
+        provenance: 'fake',
+        election_id: itemToStringId(dummyAppData.ballots[0].election_id),
+        voter_id: dummyAppData.ballots[0].voter_id
       })
     ).rejects.toMatchObject({
-      message: ErrorMessage.BadProvenanceToken()
+      message: ErrorMessage.NotAuthorized()
     });
   });
 
@@ -1435,13 +1427,10 @@ describe('::deleteBallotFromElection', () => {
     expect.hasAssertions();
 
     await expect(
-      Backend.upsertBallot({
+      Backend.deleteBallotFromElection({
         provenance: undefined as unknown as string,
-        data: {
-          title: 'updated election',
-          contents: '',
-          creator_id: itemToStringId(dummyAppData.users[0])
-        }
+        election_id: itemToStringId(dummyAppData.ballots[0].election_id),
+        voter_id: dummyAppData.ballots[0].voter_id
       })
     ).rejects.toMatchObject({
       message: ErrorMessage.BadProvenanceToken()
@@ -1452,62 +1441,74 @@ describe('::deleteBallotFromElection', () => {
     expect.hasAssertions();
 
     await expect(
-      Backend.deleteArticle({ article_id: 'does-not-exist' })
+      Backend.deleteBallotFromElection({
+        provenance,
+        election_id: 'does-not-exist',
+        voter_id: 'fake'
+      })
     ).rejects.toMatchObject({
       message: ErrorMessage.InvalidObjectId('does-not-exist')
     });
 
     await expect(
-      Backend.deleteArticle({ article_id: undefined })
+      Backend.deleteBallotFromElection({
+        provenance,
+        election_id: undefined,
+        voter_id: 'fake'
+      })
     ).rejects.toMatchObject({
-      message: ErrorMessage.InvalidItem('article_id', 'parameter')
+      message: ErrorMessage.ItemNotFound(undefined, 'election')
     });
 
-    const article_id = itemToStringId(new ObjectId());
-    await expect(Backend.deleteArticle({ article_id })).rejects.toMatchObject({
-      message: ErrorMessage.ItemNotFound(article_id, 'article')
+    const election_id = itemToStringId(new ObjectId());
+    await expect(
+      Backend.deleteBallotFromElection({ provenance, election_id, voter_id: 'fake' })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.ItemNotFound(election_id, 'election')
     });
   });
 
-  it('rejects if the voter_id is undefined, invalid, or not found', async () => {
+  it('rejects if the voter_id is undefined or not found', async () => {
     expect.hasAssertions();
 
+    const election_id = itemToStringId(dummyAppData.ballots[0].election_id);
+
     await expect(
-      Backend.deleteArticle({ article_id: 'does-not-exist' })
+      Backend.deleteBallotFromElection({
+        provenance,
+        election_id,
+        voter_id: 'fake'
+      })
     ).rejects.toMatchObject({
-      message: ErrorMessage.InvalidObjectId('does-not-exist')
+      message: ErrorMessage.ItemNotFound('fake', 'ballot')
     });
 
     await expect(
-      Backend.deleteArticle({ article_id: undefined })
+      Backend.deleteBallotFromElection({
+        provenance,
+        election_id,
+        voter_id: undefined
+      })
     ).rejects.toMatchObject({
-      message: ErrorMessage.InvalidItem('article_id', 'parameter')
-    });
-
-    const article_id = itemToStringId(new ObjectId());
-    await expect(Backend.deleteArticle({ article_id })).rejects.toMatchObject({
-      message: ErrorMessage.ItemNotFound(article_id, 'article')
+      message: ErrorMessage.InvalidStringLength(
+        'voter_id',
+        1,
+        getEnv().MAX_VOTERID_LENGTH,
+        'string'
+      )
     });
   });
 
   it('rejects if the voter_id and election_id are defined but do not form a valid composite key', async () => {
     expect.hasAssertions();
 
-    await expect(
-      Backend.deleteArticle({ article_id: 'does-not-exist' })
-    ).rejects.toMatchObject({
-      message: ErrorMessage.InvalidObjectId('does-not-exist')
-    });
+    const election_id = itemToStringId(dummyAppData.elections[0]);
+    const voter_id = dummyAppData.ballots[0].voter_id;
 
     await expect(
-      Backend.deleteArticle({ article_id: undefined })
+      Backend.deleteBallotFromElection({ election_id, voter_id, provenance })
     ).rejects.toMatchObject({
-      message: ErrorMessage.InvalidItem('article_id', 'parameter')
-    });
-
-    const article_id = itemToStringId(new ObjectId());
-    await expect(Backend.deleteArticle({ article_id })).rejects.toMatchObject({
-      message: ErrorMessage.ItemNotFound(article_id, 'article')
+      message: ErrorMessage.ItemNotFound(voter_id, 'ballot')
     });
   });
 });
@@ -1516,47 +1517,40 @@ describe('::superDeleteElectionAndRelatedBallots', () => {
   it('permanently deletes an election and all its ballots', async () => {
     expect.hasAssertions();
 
-    const opportunitiesDb = await getOpportunitiesDb();
+    const electionsDb = await getElectionsDb();
+    const electionId = itemToObjectId(dummyAppData.elections[0]);
+
+    await expect(electionsDb.countDocuments({ _id: electionId })).resolves.toBe(1);
 
     await expect(
-      opportunitiesDb.countDocuments({
-        _id: itemToObjectId(dummyAppData.opportunities[0])
-      })
-    ).resolves.toBe(1);
-
-    await expect(
-      Backend.deleteOpportunity({
-        opportunity_id: itemToStringId(dummyAppData.opportunities[0])
+      Backend.superDeleteElectionAndRelatedBallots({
+        election_id: electionId.toString()
       })
     ).resolves.toBeUndefined();
 
-    await expect(
-      opportunitiesDb.countDocuments({
-        _id: itemToObjectId(dummyAppData.opportunities[0])
-      })
-    ).resolves.toBe(0);
+    await expect(electionsDb.countDocuments({ _id: electionId })).resolves.toBe(0);
   });
 
   it('rejects if the election_id is undefined, invalid, or not found', async () => {
     expect.hasAssertions();
 
     await expect(
-      Backend.deleteOpportunity({ opportunity_id: 'does-not-exist' })
+      Backend.superDeleteElectionAndRelatedBallots({ election_id: 'invalid' })
     ).rejects.toMatchObject({
-      message: ErrorMessage.InvalidObjectId('does-not-exist')
+      message: ErrorMessage.InvalidObjectId('invalid')
     });
 
     await expect(
-      Backend.deleteOpportunity({ opportunity_id: undefined })
+      Backend.superDeleteElectionAndRelatedBallots({ election_id: undefined })
     ).rejects.toMatchObject({
-      message: ErrorMessage.InvalidItem('opportunity_id', 'parameter')
+      message: ErrorMessage.ItemNotFound(undefined, 'election')
     });
 
-    const opportunity_id = itemToStringId(new ObjectId());
-    await expect(Backend.deleteOpportunity({ opportunity_id })).rejects.toMatchObject(
-      {
-        message: ErrorMessage.ItemNotFound(opportunity_id, 'opportunity')
-      }
-    );
+    const election_id = itemToStringId(new ObjectId());
+    await expect(
+      Backend.superDeleteElectionAndRelatedBallots({ election_id })
+    ).rejects.toMatchObject({
+      message: ErrorMessage.ItemNotFound(election_id, 'election')
+    });
   });
 });
