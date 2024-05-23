@@ -10,20 +10,13 @@ import { ErrorMessage } from 'universe/error';
 import {
   getBallotsDb,
   getElectionsDb,
-  getSchemaConfig,
   toPublicBallot,
   toPublicElection,
   toPublicInfo,
-  type ElectionId,
-  type InternalBallot,
-  type InternalElection,
   type NewElection,
   type NewOrPatchBallot,
   type PatchElection,
-  type PublicBallot,
-  type PublicElection,
-  type PublicInfo,
-  type VoterId
+  type PublicElection
 } from 'universe/backend/db';
 
 import { expectExceptionsWithMatchingErrors } from 'multiverse/jest-expect-matching-errors';
