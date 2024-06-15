@@ -17,7 +17,7 @@
     "__test:repeat:unit": "echo 'Repeating test suite [initializing]...'; (i=0; while [ \"$((( i += 1 ) <= 100 ))\" -ne 0 ]; do sleep 0.1 && echo \"\\r\\033[1A\\033[0KRepeating test suite [run $i/100]...\" && JEST_SILENT_REPORTER_SHOW_WARNINGS=true NODE_ENV=test npx jest --reporters=jest-silent-reporter --testPathIgnorePatterns '/(integration|e2e).*?\\.test\\.tsx?' '/dist/' || exit; done) && echo \"All tests passed! Congrats!\"",
     "build": "npm run build:dist --",
     "build:changelog": "conventional-changelog --outfile CHANGELOG.md --config ./conventional.config.js --release-count 0 --skip-unstable && (if [ \"$CHANGELOG_SKIP_TITLE\" != 'true' ]; then { node -e 'console.log(require(\"./conventional.config.js\").changelogTitle)'; cat CHANGELOG.md; } > CHANGELOG.md.ignore && mv CHANGELOG.md.ignore CHANGELOG.md; fi) && NODE_ENV=format remark --output --frail CHANGELOG.md && prettier --write CHANGELOG.md",
-    "build:dist": "next build",
+    "build:dist": "NODE_ENV=production next build",
     "build:docs": "typedoc --plugin typedoc-plugin-markdown --cleanOutputDir --tsconfig tsconfig.docs.json --out docs --entryPointStrategy expand --readme none lib src test types external-scripts --exclude '**/*.test.*' --exclude external-scripts/bin",
     "build:externals": "NODE_ENV=external webpack --config-name externals",
     "build:stats": "NODE_ENV=production webpack --json > bundle-stats.ignore.json",
