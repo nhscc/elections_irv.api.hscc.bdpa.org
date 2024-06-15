@@ -8,7 +8,7 @@ import {
 } from './token';
 
 import type { WithId } from 'mongodb';
-import type { Merge, Exact } from 'type-fest';
+import type { Merge } from 'type-fest';
 
 /**
  * The base shape of an entry in the well-known "auth" collection. Consists of a
